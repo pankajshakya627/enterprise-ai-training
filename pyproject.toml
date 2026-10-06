@@ -1,0 +1,33 @@
+[project]
+name = "nexaassist"
+version = "0.1.0"
+description = "NexaAssist: enterprise policy and compliance RAG (Phase 1)"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "ddtrace",
+    "langchain-core",
+    "langchain-mongodb",
+    "langchain-openai",
+    "pdfplumber",
+    "pydantic>=2",
+    "pydantic-settings",
+    "pymongo",
+    "structlog",
+    "unstructured[md]",
+]
+
+[dependency-groups]
+dev = ["ipykernel", "mypy", "pytest", "python-dotenv", "ruff"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true

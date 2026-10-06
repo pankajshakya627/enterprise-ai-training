@@ -1,0 +1,975 @@
+[
+  {
+    "doc_id": "POL-HL-V1",
+    "file": "policies/POL-HL-V1_NexaHome_Loan_Policy_v1.0.pdf",
+    "title": "NexaHome Loan Policy",
+    "version": "1.0",
+    "product_id": "NEXA-HL",
+    "status": "superseded",
+    "effective_from": "2023-04-01",
+    "effective_to": "2024-03-31",
+    "supersedes": null,
+    "superseded_by": "POL-HL-V2",
+    "authoritative": true,
+    "sha256": "b67583cc33789c384e9d9343a91348179ab31e9c5b0e2142d175a6b23acd2517",
+    "clauses": [
+      {
+        "key": "scope.purpose",
+        "clause": "1.1",
+        "heading": "Purpose"
+      },
+      {
+        "key": "scope.applicability",
+        "clause": "1.2",
+        "heading": "Applicability"
+      },
+      {
+        "key": "def.terms",
+        "clause": "2.1",
+        "heading": "Defined terms"
+      },
+      {
+        "key": "elig.age",
+        "clause": "3.1",
+        "heading": "Age"
+      },
+      {
+        "key": "elig.income",
+        "clause": "3.2",
+        "heading": "Minimum income"
+      },
+      {
+        "key": "elig.bureau",
+        "clause": "3.3",
+        "heading": "Bureau score"
+      },
+      {
+        "key": "elig.foir",
+        "clause": "3.4",
+        "heading": "FOIR limit"
+      },
+      {
+        "key": "elig.category",
+        "clause": "3.5",
+        "heading": "Applicant categories"
+      },
+      {
+        "key": "limits.amount",
+        "clause": "4.1",
+        "heading": "Loan amount"
+      },
+      {
+        "key": "limits.tenure",
+        "clause": "4.2",
+        "heading": "Tenure"
+      },
+      {
+        "key": "rate.benchmark",
+        "clause": "5.1",
+        "heading": "Benchmark"
+      },
+      {
+        "key": "rate.spread",
+        "clause": "5.2",
+        "heading": "Spread by Bureau Score"
+      },
+      {
+        "key": "rate.reset",
+        "clause": "5.3",
+        "heading": "Rate reset"
+      },
+      {
+        "key": "rate.fixed",
+        "clause": "5.4",
+        "heading": "Fixed-rate option"
+      },
+      {
+        "key": "fees.general",
+        "clause": "6.1",
+        "heading": "General"
+      },
+      {
+        "key": "fees.processing",
+        "clause": "6.2",
+        "heading": "Processing fee"
+      },
+      {
+        "key": "fees.legal",
+        "clause": "6.3",
+        "heading": "Legal and technical charges"
+      },
+      {
+        "key": "fees.penal",
+        "clause": "6.4",
+        "heading": "Penal charges"
+      },
+      {
+        "key": "fees.other",
+        "clause": "6.5",
+        "heading": "Other costs"
+      },
+      {
+        "key": "collateral",
+        "clause": "7.1",
+        "heading": "Security"
+      },
+      {
+        "key": "ltv",
+        "clause": "7.2",
+        "heading": "Loan to value (LTV)"
+      },
+      {
+        "key": "collateral.insurance",
+        "clause": "7.3",
+        "heading": "Property insurance"
+      },
+      {
+        "key": "prepay.foreclosure_floating",
+        "clause": "8.1",
+        "heading": "Foreclosure, floating rate"
+      },
+      {
+        "key": "prepay.foreclosure_fixed",
+        "clause": "8.2",
+        "heading": "Foreclosure during a fixed-rate period"
+      },
+      {
+        "key": "prepay.part",
+        "clause": "8.3",
+        "heading": "Part prepayment"
+      },
+      {
+        "key": "prepay.notice",
+        "clause": "8.4",
+        "heading": "Notice"
+      },
+      {
+        "key": "docs.kyc",
+        "clause": "9.1",
+        "heading": "KYC"
+      },
+      {
+        "key": "docs.income",
+        "clause": "9.2",
+        "heading": "Income documents"
+      },
+      {
+        "key": "control.history",
+        "clause": "10.1",
+        "heading": "Version history"
+      },
+      {
+        "key": "control.supersession",
+        "clause": "10.2",
+        "heading": "Supersession"
+      }
+    ]
+  },
+  {
+    "doc_id": "POL-HL-V2",
+    "file": "policies/POL-HL-V2_NexaHome_Loan_Policy_v2.0.pdf",
+    "title": "NexaHome Loan Policy",
+    "version": "2.0",
+    "product_id": "NEXA-HL",
+    "status": "superseded",
+    "effective_from": "2024-04-01",
+    "effective_to": "2025-09-30",
+    "supersedes": "POL-HL-V1",
+    "superseded_by": "POL-HL-V3",
+    "authoritative": true,
+    "sha256": "cd5ed79a636e1a3b91728521c18e4c1a151ebdaa0ef263cafee49b8a9ef2123a",
+    "clauses": [
+      {
+        "key": "scope.purpose",
+        "clause": "1.1",
+        "heading": "Purpose"
+      },
+      {
+        "key": "scope.applicability",
+        "clause": "1.2",
+        "heading": "Applicability"
+      },
+      {
+        "key": "def.terms",
+        "clause": "2.1",
+        "heading": "Defined terms"
+      },
+      {
+        "key": "elig.age",
+        "clause": "3.1",
+        "heading": "Age"
+      },
+      {
+        "key": "elig.income",
+        "clause": "3.2",
+        "heading": "Minimum income"
+      },
+      {
+        "key": "elig.bureau",
+        "clause": "3.3",
+        "heading": "Bureau score"
+      },
+      {
+        "key": "elig.foir",
+        "clause": "3.4",
+        "heading": "FOIR limit"
+      },
+      {
+        "key": "elig.category",
+        "clause": "3.5",
+        "heading": "Applicant categories"
+      },
+      {
+        "key": "limits.amount",
+        "clause": "4.1",
+        "heading": "Loan amount"
+      },
+      {
+        "key": "limits.tenure",
+        "clause": "4.2",
+        "heading": "Tenure"
+      },
+      {
+        "key": "rate.benchmark",
+        "clause": "5.1",
+        "heading": "Benchmark"
+      },
+      {
+        "key": "rate.spread",
+        "clause": "5.2",
+        "heading": "Spread by Bureau Score"
+      },
+      {
+        "key": "rate.reset",
+        "clause": "5.3",
+        "heading": "Rate reset"
+      },
+      {
+        "key": "rate.fixed",
+        "clause": "5.4",
+        "heading": "Fixed-rate option"
+      },
+      {
+        "key": "fees.general",
+        "clause": "6.1",
+        "heading": "General"
+      },
+      {
+        "key": "fees.processing",
+        "clause": "6.2",
+        "heading": "Processing fee"
+      },
+      {
+        "key": "fees.legal",
+        "clause": "6.3",
+        "heading": "Legal and technical charges"
+      },
+      {
+        "key": "fees.penal",
+        "clause": "6.4",
+        "heading": "Penal charges"
+      },
+      {
+        "key": "fees.other",
+        "clause": "6.5",
+        "heading": "Other costs"
+      },
+      {
+        "key": "collateral",
+        "clause": "7.1",
+        "heading": "Security"
+      },
+      {
+        "key": "ltv",
+        "clause": "7.2",
+        "heading": "Loan to value (LTV)"
+      },
+      {
+        "key": "collateral.insurance",
+        "clause": "7.3",
+        "heading": "Property insurance"
+      },
+      {
+        "key": "prepay.foreclosure_floating",
+        "clause": "8.1",
+        "heading": "Foreclosure, floating rate"
+      },
+      {
+        "key": "prepay.foreclosure_fixed",
+        "clause": "8.2",
+        "heading": "Foreclosure during a fixed-rate period"
+      },
+      {
+        "key": "prepay.part",
+        "clause": "8.3",
+        "heading": "Part prepayment"
+      },
+      {
+        "key": "prepay.notice",
+        "clause": "8.4",
+        "heading": "Notice"
+      },
+      {
+        "key": "docs.kyc",
+        "clause": "9.1",
+        "heading": "KYC"
+      },
+      {
+        "key": "docs.income",
+        "clause": "9.2",
+        "heading": "Income documents"
+      },
+      {
+        "key": "control.history",
+        "clause": "10.1",
+        "heading": "Version history"
+      },
+      {
+        "key": "control.supersession",
+        "clause": "10.2",
+        "heading": "Supersession"
+      }
+    ]
+  },
+  {
+    "doc_id": "POL-HL-V3",
+    "file": "policies/POL-HL-V3_NexaHome_Loan_Policy_v3.0.pdf",
+    "title": "NexaHome Loan Policy",
+    "version": "3.0",
+    "product_id": "NEXA-HL",
+    "status": "in_force_amended_in_part",
+    "effective_from": "2025-10-01",
+    "effective_to": null,
+    "supersedes": "POL-HL-V2",
+    "superseded_by": null,
+    "authoritative": true,
+    "sha256": "0bbe5928b21a807f1ca4a602f8006087ab0526cb2573e2d237504d18b79d1c77",
+    "clauses": [
+      {
+        "key": "scope.purpose",
+        "clause": "1.1",
+        "heading": "Purpose"
+      },
+      {
+        "key": "scope.applicability",
+        "clause": "1.2",
+        "heading": "Applicability"
+      },
+      {
+        "key": "def.terms",
+        "clause": "2.1",
+        "heading": "Defined terms"
+      },
+      {
+        "key": "elig.age",
+        "clause": "3.1",
+        "heading": "Age"
+      },
+      {
+        "key": "elig.income",
+        "clause": "3.2",
+        "heading": "Minimum income"
+      },
+      {
+        "key": "elig.bureau",
+        "clause": "3.3",
+        "heading": "Bureau score"
+      },
+      {
+        "key": "elig.foir",
+        "clause": "3.4",
+        "heading": "FOIR limit"
+      },
+      {
+        "key": "elig.category",
+        "clause": "3.5",
+        "heading": "Applicant categories"
+      },
+      {
+        "key": "limits.amount",
+        "clause": "4.1",
+        "heading": "Loan amount"
+      },
+      {
+        "key": "limits.tenure",
+        "clause": "4.2",
+        "heading": "Tenure"
+      },
+      {
+        "key": "rate.benchmark",
+        "clause": "5.1",
+        "heading": "Benchmark"
+      },
+      {
+        "key": "rate.spread",
+        "clause": "5.2",
+        "heading": "Spread by Bureau Score"
+      },
+      {
+        "key": "rate.reset",
+        "clause": "5.3",
+        "heading": "Rate reset"
+      },
+      {
+        "key": "rate.fixed",
+        "clause": "5.4",
+        "heading": "Fixed-rate option"
+      },
+      {
+        "key": "fees.general",
+        "clause": "6.1",
+        "heading": "General"
+      },
+      {
+        "key": "fees.processing",
+        "clause": "6.2",
+        "heading": "Processing fee"
+      },
+      {
+        "key": "fees.legal",
+        "clause": "6.3",
+        "heading": "Legal and technical charges"
+      },
+      {
+        "key": "fees.penal",
+        "clause": "6.4",
+        "heading": "Penal charges"
+      },
+      {
+        "key": "fees.other",
+        "clause": "6.5",
+        "heading": "Other costs"
+      },
+      {
+        "key": "collateral",
+        "clause": "7.1",
+        "heading": "Security"
+      },
+      {
+        "key": "ltv",
+        "clause": "7.2",
+        "heading": "Loan to value (LTV)"
+      },
+      {
+        "key": "collateral.insurance",
+        "clause": "7.3",
+        "heading": "Property insurance"
+      },
+      {
+        "key": "prepay.foreclosure_floating",
+        "clause": "8.1",
+        "heading": "Foreclosure, floating rate"
+      },
+      {
+        "key": "prepay.foreclosure_fixed",
+        "clause": "8.2",
+        "heading": "Foreclosure of fixed-rate loans"
+      },
+      {
+        "key": "prepay.part",
+        "clause": "8.3",
+        "heading": "Part prepayment"
+      },
+      {
+        "key": "prepay.notice",
+        "clause": "8.4",
+        "heading": "Notice"
+      },
+      {
+        "key": "docs.kyc",
+        "clause": "9.1",
+        "heading": "KYC"
+      },
+      {
+        "key": "docs.income",
+        "clause": "9.2",
+        "heading": "Income documents"
+      },
+      {
+        "key": "control.history",
+        "clause": "10.1",
+        "heading": "Version history"
+      },
+      {
+        "key": "control.supersession",
+        "clause": "10.2",
+        "heading": "Supersession"
+      },
+      {
+        "key": "control.amendment",
+        "clause": "10.3",
+        "heading": "Amendment by circular"
+      }
+    ]
+  },
+  {
+    "doc_id": "CIR-2026-07",
+    "file": "policies/CIR-2026-07_Circular_NexaHome_Fee_and_PartPrepayment.pdf",
+    "title": "Circular CIR-2026-07",
+    "version": "1.0",
+    "product_id": "NEXA-HL",
+    "status": "in_force",
+    "effective_from": "2026-07-01",
+    "effective_to": null,
+    "supersedes": "POL-HL-V3 (clauses 6.2, 8.3 only)",
+    "superseded_by": null,
+    "authoritative": true,
+    "sha256": "6e7f3f819bc235333ab643d95a4dec9d646712bdb6d2ce252a276f7953da5f44",
+    "clauses": [
+      {
+        "key": "circ.background",
+        "clause": "1.1",
+        "heading": "Background"
+      },
+      {
+        "key": "circ.precedence",
+        "clause": "2.1",
+        "heading": "Precedence"
+      },
+      {
+        "key": "circ.fee",
+        "clause": "3.1",
+        "heading": "Revised clause 6.2"
+      },
+      {
+        "key": "circ.partprepay",
+        "clause": "4.1",
+        "heading": "Revised clause 8.3"
+      },
+      {
+        "key": "circ.applicability",
+        "clause": "5.1",
+        "heading": "Loans covered"
+      },
+      {
+        "key": "circ.optin",
+        "clause": "5.2",
+        "heading": "Existing borrowers and part prepayment"
+      },
+      {
+        "key": "circ.unchanged",
+        "clause": "6.1",
+        "heading": "Terms not affected"
+      }
+    ]
+  },
+  {
+    "doc_id": "POL-PL-V1",
+    "file": "policies/POL-PL-V1_NexaFlex_Personal_Loan_Policy_v1.0.pdf",
+    "title": "NexaFlex Personal Loan Policy",
+    "version": "1.0",
+    "product_id": "NEXA-PL",
+    "status": "in_force",
+    "effective_from": "2024-01-01",
+    "effective_to": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "authoritative": true,
+    "sha256": "8b8fa8b5ae9fbab4f48a40f2469dc0640a2e4f58d75539afa150840aecb93c14",
+    "clauses": [
+      {
+        "key": "scope.purpose",
+        "clause": "1.1",
+        "heading": "Purpose"
+      },
+      {
+        "key": "scope.applicability",
+        "clause": "1.2",
+        "heading": "Applicability"
+      },
+      {
+        "key": "elig.age",
+        "clause": "2.1",
+        "heading": "Age"
+      },
+      {
+        "key": "elig.income",
+        "clause": "2.2",
+        "heading": "Minimum income"
+      },
+      {
+        "key": "elig.bureau",
+        "clause": "2.3",
+        "heading": "Bureau score"
+      },
+      {
+        "key": "elig.foir",
+        "clause": "2.4",
+        "heading": "FOIR"
+      },
+      {
+        "key": "limits.amount",
+        "clause": "3.1",
+        "heading": "Loan amount"
+      },
+      {
+        "key": "limits.tenure",
+        "clause": "3.2",
+        "heading": "Tenure"
+      },
+      {
+        "key": "rate.fixed",
+        "clause": "4.1",
+        "heading": "Fixed rate"
+      },
+      {
+        "key": "fees.processing",
+        "clause": "5.1",
+        "heading": "Processing fee"
+      },
+      {
+        "key": "fees.penal",
+        "clause": "5.2",
+        "heading": "Late payment charge"
+      },
+      {
+        "key": "collateral",
+        "clause": "6.1",
+        "heading": "Security"
+      },
+      {
+        "key": "prepay.lockin",
+        "clause": "7.1",
+        "heading": "Lock-in"
+      },
+      {
+        "key": "prepay.foreclosure",
+        "clause": "7.2",
+        "heading": "Foreclosure charge"
+      },
+      {
+        "key": "prepay.part",
+        "clause": "7.3",
+        "heading": "Part prepayment"
+      },
+      {
+        "key": "docs.kyc",
+        "clause": "8.1",
+        "heading": "KYC"
+      },
+      {
+        "key": "control.history",
+        "clause": "9.1",
+        "heading": "Version history"
+      }
+    ]
+  },
+  {
+    "doc_id": "POL-LAP-V1",
+    "file": "policies/POL-LAP-V1_NexaProperty_Plus_LAP_Policy_v1.0.pdf",
+    "title": "NexaProperty Plus Loan Against Property Policy",
+    "version": "1.0",
+    "product_id": "NEXA-LAP",
+    "status": "in_force",
+    "effective_from": "2024-06-01",
+    "effective_to": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "authoritative": true,
+    "sha256": "093bfb6a3203a449f4d20c86ed4b9091335e543adac4ebed7720aceb90882274",
+    "clauses": [
+      {
+        "key": "scope.purpose",
+        "clause": "1.1",
+        "heading": "Purpose"
+      },
+      {
+        "key": "scope.applicability",
+        "clause": "1.2",
+        "heading": "Applicability"
+      },
+      {
+        "key": "elig.age",
+        "clause": "2.1",
+        "heading": "Age"
+      },
+      {
+        "key": "elig.income",
+        "clause": "2.2",
+        "heading": "Minimum income"
+      },
+      {
+        "key": "elig.bureau",
+        "clause": "2.3",
+        "heading": "Bureau score"
+      },
+      {
+        "key": "elig.foir",
+        "clause": "2.4",
+        "heading": "FOIR"
+      },
+      {
+        "key": "limits.amount",
+        "clause": "3.1",
+        "heading": "Loan amount"
+      },
+      {
+        "key": "limits.tenure",
+        "clause": "3.2",
+        "heading": "Tenure"
+      },
+      {
+        "key": "rate.floating",
+        "clause": "4.1",
+        "heading": "Floating rate"
+      },
+      {
+        "key": "fees.processing",
+        "clause": "5.1",
+        "heading": "Processing fee"
+      },
+      {
+        "key": "fees.legal",
+        "clause": "5.2",
+        "heading": "Legal and technical charges"
+      },
+      {
+        "key": "fees.penal",
+        "clause": "5.3",
+        "heading": "Penal charges"
+      },
+      {
+        "key": "collateral",
+        "clause": "6.1",
+        "heading": "Security"
+      },
+      {
+        "key": "ltv",
+        "clause": "6.2",
+        "heading": "Loan to value"
+      },
+      {
+        "key": "prepay.foreclosure",
+        "clause": "7.1",
+        "heading": "Foreclosure"
+      },
+      {
+        "key": "prepay.part",
+        "clause": "7.2",
+        "heading": "Part prepayment"
+      },
+      {
+        "key": "docs.kyc",
+        "clause": "8.1",
+        "heading": "KYC"
+      },
+      {
+        "key": "control.history",
+        "clause": "9.1",
+        "heading": "Version history"
+      }
+    ]
+  },
+  {
+    "doc_id": "POL-AL-V1",
+    "file": "policies/POL-AL-V1_NexaDrive_Auto_Loan_Policy_v1.0.pdf",
+    "title": "NexaDrive Auto Loan Policy",
+    "version": "1.0",
+    "product_id": "NEXA-AL",
+    "status": "in_force",
+    "effective_from": "2025-01-01",
+    "effective_to": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "authoritative": true,
+    "sha256": "8385793476e4fefdfd08f370ebba83ea0c618746c5e616cd86a9f01b31ac7acd",
+    "clauses": [
+      {
+        "key": "scope.purpose",
+        "clause": "1.1",
+        "heading": "Purpose"
+      },
+      {
+        "key": "scope.applicability",
+        "clause": "1.2",
+        "heading": "Applicability"
+      },
+      {
+        "key": "elig.age",
+        "clause": "2.1",
+        "heading": "Age"
+      },
+      {
+        "key": "elig.income",
+        "clause": "2.2",
+        "heading": "Minimum income"
+      },
+      {
+        "key": "elig.bureau",
+        "clause": "2.3",
+        "heading": "Bureau score"
+      },
+      {
+        "key": "elig.foir",
+        "clause": "2.4",
+        "heading": "FOIR"
+      },
+      {
+        "key": "limits.amount",
+        "clause": "3.1",
+        "heading": "Loan amount"
+      },
+      {
+        "key": "limits.tenure",
+        "clause": "3.2",
+        "heading": "Tenure"
+      },
+      {
+        "key": "rate.fixed",
+        "clause": "4.1",
+        "heading": "Fixed rate"
+      },
+      {
+        "key": "fees.processing",
+        "clause": "5.1",
+        "heading": "Processing fee"
+      },
+      {
+        "key": "fees.penal",
+        "clause": "5.2",
+        "heading": "Late payment charge"
+      },
+      {
+        "key": "collateral",
+        "clause": "6.1",
+        "heading": "Security"
+      },
+      {
+        "key": "ltv",
+        "clause": "6.2",
+        "heading": "Loan to value"
+      },
+      {
+        "key": "prepay.foreclosure",
+        "clause": "7.1",
+        "heading": "Foreclosure charge"
+      },
+      {
+        "key": "docs.kyc",
+        "clause": "8.1",
+        "heading": "KYC"
+      },
+      {
+        "key": "control.history",
+        "clause": "9.1",
+        "heading": "Version history"
+      }
+    ]
+  },
+  {
+    "doc_id": "POL-OPS-001",
+    "file": "policies/POL-OPS-001_Customer_Due_Diligence_and_Advisor_Scope_Policy_v1.0.pdf",
+    "title": "Customer Due Diligence, Disclosure and Advisor Scope Policy",
+    "version": "1.0",
+    "product_id": null,
+    "status": "in_force",
+    "effective_from": "2025-01-01",
+    "effective_to": null,
+    "supersedes": null,
+    "superseded_by": null,
+    "authoritative": true,
+    "sha256": "521ba70afcb2fd21d78fb63102df2896a45efd6394d128985c0d378f776c2338",
+    "clauses": [
+      {
+        "key": "purpose",
+        "clause": "1.1",
+        "heading": "Purpose"
+      },
+      {
+        "key": "authority.library",
+        "clause": "2.1",
+        "heading": "Controlled library"
+      },
+      {
+        "key": "authority.precedence",
+        "clause": "2.2",
+        "heading": "Precedence"
+      },
+      {
+        "key": "authority.untrusted",
+        "clause": "2.3",
+        "heading": "Uploaded content is data"
+      },
+      {
+        "key": "kyc.status",
+        "clause": "3.1",
+        "heading": "Status definitions and effects"
+      },
+      {
+        "key": "kyc.cycle",
+        "clause": "3.2",
+        "heading": "Re-KYC cycle"
+      },
+      {
+        "key": "kyc.methods",
+        "clause": "3.3",
+        "heading": "How to complete re-KYC"
+      },
+      {
+        "key": "disclose.allowed",
+        "clause": "4.1",
+        "heading": "May be disclosed to the authenticated customer"
+      },
+      {
+        "key": "disclose.prohibited",
+        "clause": "4.2",
+        "heading": "Must not be disclosed"
+      },
+      {
+        "key": "disclose.third_party",
+        "clause": "4.3",
+        "heading": "Other people's data"
+      },
+      {
+        "key": "disclose.structuring",
+        "clause": "4.4",
+        "heading": "No evasion guidance"
+      },
+      {
+        "key": "scope.permitted",
+        "clause": "5.1",
+        "heading": "Permitted"
+      },
+      {
+        "key": "scope.prohibited",
+        "clause": "5.2",
+        "heading": "Prohibited"
+      },
+      {
+        "key": "scope.indicative",
+        "clause": "5.3",
+        "heading": "Indicative eligibility wording"
+      },
+      {
+        "key": "escalate.triggers",
+        "clause": "6.1",
+        "heading": "When to escalate"
+      },
+      {
+        "key": "escalate.how",
+        "clause": "6.2",
+        "heading": "How"
+      },
+      {
+        "key": "income.status",
+        "clause": "7.1",
+        "heading": "Statuses"
+      },
+      {
+        "key": "income.wording",
+        "clause": "7.2",
+        "heading": "Wording"
+      },
+      {
+        "key": "data.masking",
+        "clause": "8.1",
+        "heading": "Masking"
+      },
+      {
+        "key": "control.history",
+        "clause": "9.1",
+        "heading": "Version history"
+      }
+    ]
+  }
+]
