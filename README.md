@@ -347,6 +347,8 @@ flowchart LR
 
 ```bash
 uv sync
+source .venv/bin/activate  # macOS
+.venv\Scripts\activate     # Windows
 ```
 
 > **Heads-up:** `uv sync` creates `.venv` inside the project folder. If the folder is synced by Google Drive, point it elsewhere first:
@@ -430,9 +432,8 @@ flowchart TD
 Complete [Section 6](#6-getting-started) first, then:
 
 ```bash
-uv sync                                    # once
-uv run --env-file .env python -m app.services.ingestion \
-    nexa_synthetic_data/document_register.json
+uv sync                                 
+python -m app.services.ingestion nexa_synthetic_data/document_register.json
 ```
 
 What happens, in order: settings load from `.env`, logging is configured, the register is read, and each of the eight documents is parsed, chunked, embedded and upserted. It finishes after eight `document_ingested` log lines (see below). To ingest a different register or a copy of it, pass its path as the argument.
