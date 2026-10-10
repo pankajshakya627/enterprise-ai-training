@@ -12,7 +12,7 @@ from app.chains.ingestion import build_ingestion_chain
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.core.telemetry import init_telemetry
-from app.database.mongo import get_vector_store
+from app.database.mongo import delete_stale_chunks, get_parent_store, get_vector_store
 from app.models.ingestion import IngestRequest, IngestResponse
 
 logger = structlog.get_logger()
@@ -43,16 +43,23 @@ def requests_from_register(register_path: Path, settings: Settings) -> list[Inge
 
 
 async def ingest(requests: list[IngestRequest]) -> list[IngestResponse]:
+    """Embed only new or changed chunks, then retire chunks the source no longer has."""
     settings = get_settings()
     vector_store = get_vector_store(settings, get_embeddings(settings))
-    chain = build_ingestion_chain(vector_store, settings)
+    chain = build_ingestion_chain(vector_store, get_parent_store(settings), settings)
     responses = []
     for request in requests:
         response = await chain.ainvoke({"request": request})
+        removed = await asyncio.to_thread(
+            delete_stale_chunks, vector_store.collection, request.doc_id, response.chunk_ids
+        )
         logger.info(
             "document_ingested",
             doc_id=response.doc_id,
             chunk_count=response.chunk_count,
+            embedded_count=response.embedded_count,
+            unchanged_count=response.unchanged_count,
+            stale_chunks_removed=removed,
             embedding_model=response.embedding_model,
             policy_version=request.policy_version,
             effective_date=request.effective_date.isoformat(),

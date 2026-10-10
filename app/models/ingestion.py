@@ -8,7 +8,8 @@ from pydantic import BaseModel, ConfigDict
 class IngestRequest(BaseModel):
     """Ingestion Service contract: one source document plus its document-level metadata.
 
-    The ninth metadata field, section_type, is set per chunk by the pipeline.
+    The ninth metadata field, section_type, is set per chunk by the pipeline, as are
+    clause, parent_id and checksum.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -33,4 +34,6 @@ class IngestResponse(BaseModel):
     doc_id: str
     chunk_count: int
     chunk_ids: list[str]
+    embedded_count: int
+    unchanged_count: int
     embedding_model: str

@@ -2,7 +2,7 @@
 
 A policy, product and lending advisor for the staff of NexaBank (a fictional bank), built as the hands-on codebase for the **Enterprise Agentic RAG** training program. Everything is synthetic.
 
-This repository currently contains **Phase 1, Session 1**: the architecture and the **ingestion (write) path**. It turns the bank's policy PDFs into versioned, embedded chunks in MongoDB Atlas. The retrieval (read) path arrives in later sessions.
+This repository currently contains **Phase 1, Sessions 1 and 2**: the architecture and the **ingestion (write) path**. It turns the bank's policy PDFs into versioned, clause-level chunks in MongoDB Atlas, keeps each section as a parent document, and re-embeds only what changed. The retrieval (read) path arrives in later sessions.
 
 | | |
 |---|---|
@@ -10,7 +10,8 @@ This repository currently contains **Phase 1, Session 1**: the architecture and 
 | Orchestration | LangChain (LCEL runnables) |
 | Vector store | MongoDB Atlas Vector Search via `langchain-mongodb` |
 | Embeddings | OpenAI `text-embedding-3-small`, 1536 dimensions |
-| PDF parsing | `pdfplumber` (tables and headings), `unstructured` (chunking) |
+| PDF parsing | `pdfplumber` (tables and headings), `unstructured` (element types) |
+| Chunking | Clause-aware rules in `app/chains/chunking.py`, `langchain-text-splitters` for oversized clauses |
 | Config and logging | `pydantic-settings`, `structlog` (JSON), optional `ddtrace` |
 | Package manager | `uv` |
 
@@ -35,16 +36,18 @@ The system has two paths that share a store, not a service. Ingestion is bursty 
 
 ```mermaid
 flowchart LR
-    subgraph WRITE["Write path: built in Session 1"]
+    subgraph WRITE["Write path: built in Sessions 1 and 2"]
         direction LR
         SRC["Policy PDFs and circulars"] --> LOAD["Load via document register"]
         LOAD --> PARSE["Parse: tables, headings"]
-        PARSE --> CHUNK["Chunk by section"]
-        CHUNK --> ENRICH["Enrich: 9 metadata fields"]
-        ENRICH --> EMBED["Embed with OpenAI"]
+        PARSE --> CHUNK["Chunk by clause"]
+        CHUNK --> ENRICH["Enrich: header, metadata,<br/>parent_id, checksum"]
+        ENRICH --> COMPARE["Compare checksums"]
+        COMPARE --> EMBED["Embed only<br/>new or changed"]
     end
 
     EMBED --> ATLAS[("MongoDB Atlas<br/>chunks + vector index")]
+    ENRICH --> PARENTS[("MongoDB Atlas<br/>parent sections")]
 
     subgraph READ["Read path: Sessions 4 to 7"]
         direction LR
@@ -90,7 +93,8 @@ Green is implemented. Everything else is future work.
 ├── CLAUDE.md                       Rules for how the code is written
 ├── pyproject.toml                  Dependencies and tool config
 ├── .env.example                    Template for required environment variables
-├── phase1_session1_ingestion.ipynb Standalone teaching notebook (does not import app/)
+├── phase1_session1_ingestion.ipynb Standalone teaching notebook for Session 1 (does not import app/)
+├── phase1_session2_chunking.ipynb  Standalone teaching notebook for Session 2
 │
 ├── app/
 │   ├── core/                       Cross-cutting infrastructure
@@ -101,16 +105,17 @@ Green is implemented. Everything else is future work.
 │   │   └── ingestion.py            IngestRequest, IngestResponse (the service contract)
 │   ├── chains/                     Pure LangChain: no web or UI imports
 │   │   ├── parsing.py              PDF to structured elements
+│   │   ├── chunking.py             Clause-aware chunking (structure first, size second)
 │   │   ├── embeddings.py           OpenAI embeddings client
-│   │   └── ingestion.py            The write-path chain
+│   │   └── ingestion.py            The write-path chain: enrich, checksum, compare, upsert
 │   ├── database/
-│   │   ├── mongo.py                MongoDB Atlas vector store
-│   │   └── indexes.md              The Atlas Vector Search index JSON (created by hand)
+│   │   ├── mongo.py                Vector store, parent store, stale-chunk removal
+│   │   └── indexes.md              The Atlas Vector Search index JSON (created by hand), parent collection
 │   └── services/
 │       └── ingestion.py            Entry point: register to requests, run the chain
 │
 ├── tests/
-│   └── test_ingestion.py           6 tests, no network needed
+│   └── test_ingestion.py           16 tests, no network needed
 │
 └── nexa_synthetic_data/            The corpus (see its own README.md)
     ├── document_register.json      Controlled library: versions, windows, supersession
@@ -140,6 +145,7 @@ flowchart TD
     SVC --> TEL["core/telemetry.py"]
 
     CHAIN --> PARSE["chains/parsing.py"]
+    CHAIN --> CHUNKING["chains/chunking.py"]
     CHAIN --> MODELS
     CHAIN --> CFG
 
@@ -156,28 +162,37 @@ One run of `python -m app.services.ingestion <register>` does this:
 ```mermaid
 sequenceDiagram
     autonumber
-    participant CLI as services.ingestion.main
+    participant CLI as services.ingestion
     participant REG as document_register.json
     participant CH as Ingestion chain
     participant PDF as parse_document
-    participant UNS as chunk_by_title
+    participant UNS as chunk_by_clause
     participant OAI as OpenAI Embeddings
-    participant DB as MongoDB Atlas
+    participant DB as Atlas: chunks
+    participant PAR as Atlas: parent sections
 
     CLI->>REG: read entries
-    REG-->>CLI: 8 authoritative documents
-    CLI->>CLI: requests_from_register builds IngestRequest per document
+    REG-->>CLI: register entries
+    CLI->>CLI: requests_from_register filters authoritative entries and builds IngestRequests
     loop for each IngestRequest
         CLI->>CH: ainvoke(request)
         CH->>PDF: parse
         PDF-->>CH: Title, NarrativeText, Table elements
         CH->>UNS: chunk
-        UNS-->>CH: chunks (tables kept whole)
-        CH->>CH: enrich: attach metadata and chunk_id
-        CH->>OAI: embed in batches of 100
-        OAI-->>CH: vectors
-        CH->>DB: bulk upsert by chunk_id
+        UNS-->>CH: one chunk per clause (tables kept with their clause)
+        CH->>CH: enrich: header line, metadata, chunk_id, parent_id, checksum
+        CH->>DB: compare: read stored checksums by chunk_id
+        DB-->>CH: checksums
+        CH->>PAR: clear old sections and write current sections
+        alt changed chunks exist
+            CH->>OAI: embed changed chunks
+            OAI-->>CH: vectors
+            CH->>DB: upsert changed chunks by chunk_id
+        else all chunks are unchanged
+            CH->>CH: skip embedding and vector upsert
+        end
         CH-->>CLI: IngestResponse
+        CLI->>DB: delete_stale_chunks: retire chunks the source no longer has
         CLI->>CLI: log document_ingested
     end
 ```
@@ -188,9 +203,11 @@ sequenceDiagram
 |---|---|---|---|
 | 1 | Load | `requests_from_register` | One `IngestRequest` per authoritative document in the register. Files not in the register are never indexed. |
 | 2 | Parse | `parse_document` | Ordered `Title`, `NarrativeText` and `Table` elements. Tables are extracted whole as HTML; page headers and footers are dropped. |
-| 3 | Chunk | `chunk_by_title` | A new chunk at every heading. A table is never merged with neighbouring text. Size limit from `CHUNK_MAX_CHARACTERS`. |
-| 4 | Enrich | `enrich` (inside the chain) | A LangChain `Document` per chunk with a deterministic `chunk_id` and the metadata fields. |
-| 5 | Embed + upsert | `embed_and_upsert` (inside the chain) | Vectors from OpenAI, written to Atlas by `chunk_id`, so re-running replaces instead of duplicating. |
+| 3 | Chunk | `chunk_by_clause` | One chunk per numbered clause. A table or footnote stays with the clause that introduces it, and a table is never split. Only a clause over `CHUNK_MAX_CHARACTERS` is split, at sentence boundaries, with `CHUNK_OVERLAP_CHARACTERS` of overlap. |
+| 4 | Enrich + hash | `enrich` (inside the chain) | A LangChain `Document` per child chunk: identity header line, deterministic `chunk_id`, `parent_id`, clause fields, metadata and a `checksum`. Also one parent `Document` per section. |
+| 5 | Compare | `compare` (inside the chain) | The children whose checksum differs from the one stored under the same `chunk_id`. |
+| 6 | Embed + upsert | `embed_and_upsert` (inside the chain) | Parent sections rewritten; vectors from OpenAI for the changed children only, written to Atlas by `chunk_id`. |
+| 7 | Retire | `delete_stale_chunks` (called by the service) | Chunks of this document that the latest ingest no longer produced are deleted. |
 
 ---
 
@@ -205,11 +222,13 @@ classDiagram
         +str mongodb_db
         +str mongodb_collection
         +str vector_index_name
+        +str mongodb_parent_collection
         +SecretStr openai_api_key
         +str embedding_model
         +int embedding_dimensions
         +int embedding_batch_size
         +int chunk_max_characters
+        +int chunk_overlap_characters
         +str institution
         +str jurisdiction
         +str confidentiality_level
@@ -236,7 +255,18 @@ classDiagram
         +str doc_id
         +int chunk_count
         +list~str~ chunk_ids
+        +int embedded_count
+        +int unchanged_count
         +str embedding_model
+    }
+
+    class Chunk {
+        +str text
+        +int section_number
+        +str section
+        +str clause
+        +str clause_heading
+        +bool has_table
     }
 
     class BaseSettings
@@ -264,7 +294,7 @@ Both models use `extra="forbid"`, so an unknown or misspelled field raises a val
 | Item | Purpose |
 |---|---|
 | `IngestRequest` | The Ingestion Service contract: one source document plus its document-level metadata. |
-| `IngestResponse` | What an ingest returns: the document, how many chunks, their IDs, and the embedding model used. |
+| `IngestResponse` | What an ingest returns: the document, how many chunks, their IDs, how many were embedded and how many were skipped as unchanged, and the embedding model used. |
 
 ### `app/chains/`
 
@@ -274,13 +304,19 @@ Both models use `extra="forbid"`, so an unknown or misspelled field raises a val
 | `_parse_pdf` | `(path: str) -> list[Element]` | Uses `pdfplumber`. Tables come from ruling lines, headings from font size larger than the body text, and header and footer lines are cropped by page margin. Output is in reading order. |
 | `_table_element` | `(rows) -> Table` | Builds a `Table` element with an HTML rendering, so each value stays attached to its column. |
 | `get_embeddings` | `(settings) -> OpenAIEmbeddings` | Pins model, dimension and batch size from settings. The read path must use the same values. |
-| `build_ingestion_chain` | `(vector_store, settings) -> Runnable` | Composes the write path as one LCEL chain: `parse`, `chunk`, `enrich`, `embed_and_upsert`. Input is `{"request": IngestRequest}`; run it with `ainvoke`. Each stage has a `run_name`, so a LangSmith trace shows per-stage timing. |
+| `Chunk` | frozen dataclass | One child chunk before enrichment: text, section, clause number and heading, and whether it holds a table. |
+| `chunk_by_clause` | `(elements, max_characters, overlap) -> list[Chunk]` | Hybrid chunking. Structure first: one chunk per numbered clause, tables kept with their clause. Size second: an oversized clause is split with `RecursiveCharacterTextSplitter`, tables staying whole. |
+| `chunk_checksum` | `(text, metadata) -> str` | SHA-256 over the chunk text and metadata. The metadata includes `embedding_model`, so a model change forces a re-embed. |
+| `parent_key_prefix` | `(doc_id) -> str` | Key prefix of a document's parent sections (`POL-HL-V3_s`). |
+| `build_ingestion_chain` | `(vector_store, parent_store, settings) -> Runnable` | Composes the write path as one LCEL chain: `parse`, `chunk`, `enrich`, `compare`, `embed_and_upsert`. Input is `{"request": IngestRequest}`; run it with `ainvoke`. Each stage has a `run_name`, so a LangSmith trace shows the time spent per stage. It depends only on the `VectorStore` and `BaseStore` interfaces, so tests pass in-memory stores. |
 
 ### `app/database/mongo.py`
 
 | Item | Signature | Purpose |
 |---|---|---|
-| `get_vector_store` | `(settings, embedding) -> MongoDBAtlasVectorSearch` | Creates the client and returns the store with collection, embedding and index name passed explicitly. It never creates the index; that is manual (see [Section 6](#6-getting-started)). |
+| `get_vector_store` | `(settings, embedding) -> MongoDBAtlasVectorSearch` | Returns the chunk store with collection, embedding and index name passed explicitly. It never creates the index; that is manual (see [Section 6](#6-getting-started)). |
+| `get_parent_store` | `(settings) -> MongoDBDocStore` | Key-value store of whole sections, keyed by `parent_id`, in the `MONGODB_PARENT_COLLECTION` collection. Not embedded, no search index. |
+| `delete_stale_chunks` | `(collection, doc_id, keep_ids) -> int` | Deletes chunks of a document whose IDs the latest ingest did not produce. Returns how many were removed. |
 
 ### `app/services/ingestion.py`
 
@@ -288,24 +324,28 @@ Both models use `extra="forbid"`, so an unknown or misspelled field raises a val
 |---|---|---|
 | `DOC_TYPES` | `dict[str, str]` | Maps a `doc_id` prefix to a document type: `POL` is `policy`, `CIR` is `circular`. |
 | `requests_from_register` | `(register_path, settings) -> list[IngestRequest]` | Reads `document_register.json`, keeps authoritative entries, and fills `institution`, `jurisdiction` and `confidentiality_level` from settings. |
-| `ingest` | `async (requests) -> list[IngestResponse]` | Builds the store and chain once, then ingests each request in order, logging one `document_ingested` event per document. |
+| `ingest` | `async (requests) -> list[IngestResponse]` | Builds the stores and chain once, then for each request runs the chain, retires stale chunks, and logs one `document_ingested` event with `embedded_count`, `unchanged_count` and `stale_chunks_removed`. |
 | `main` | `() -> None` | Command-line entry point. Takes the register path as its only argument. |
 
 ---
 
 ## 5. Data model: the chunk record
 
-Each chunk is stored in MongoDB as one document. Metadata sits at the top level beside the text and vector.
+Each child chunk is stored in MongoDB as one document. Metadata sits at the top level beside the text and vector.
 
 ```json
 {
-  "_id": "POL-HL-V3_c007",
-  "text": "<table><tr><td>Net monthly income</td><td>Maximum FOIR</td></tr><tr><td>Below ₹1,00,000</td><td>50%</td></tr> ...</table>",
+  "_id": "POL-HL-V3_3.4_c01",
+  "text": "[POL-HL-V3 | NexaHome Loan Policy v3.0 | 3. Eligibility]\n3.4 FOIR limit. The maximum FOIR depends on net monthly income as shown below.\n<table><tr><td>Net monthly income</td><td>Maximum FOIR</td></tr><tr><td>Below ₹1,00,000</td><td>50%</td></tr> ...</table>",
   "embedding": [0.012, -0.044, "... 1536 floats"],
 
   "doc_id": "POL-HL-V3",
   "title": "NexaHome Loan Policy",
-  "chunk_id": "POL-HL-V3_c007",
+  "chunk_id": "POL-HL-V3_3.4_c01",
+  "parent_id": "POL-HL-V3_s03",
+  "section": "3. Eligibility",
+  "clause": "3.4",
+  "clause_heading": "FOIR limit",
   "institution": "NexaBank",
   "product_id": "NEXA-HL",
   "policy_version": "3.0",
@@ -316,11 +356,39 @@ Each chunk is stored in MongoDB as one document. Metadata sits at the top level 
   "doc_type": "policy",
   "section_type": "table",
   "confidentiality_level": "internal",
-  "embedding_model": "text-embedding-3-small"
+  "embedding_model": "text-embedding-3-small",
+  "checksum": "sha256:2f50cb38..."
 }
 ```
 
-The nine metadata fields from the training deck are `institution`, `product_id`, `policy_version`, `effective_date`, `supersedes`, `jurisdiction`, `doc_type`, `section_type` and `confidentiality_level`. Eight come from the request; `section_type` (`text` or `table`) is set per chunk by the pipeline. `doc_id`, `title`, `effective_to`, `chunk_id` and `embedding_model` are extra fields this build adds.
+The nine metadata fields from the training deck are `institution`, `product_id`, `policy_version`, `effective_date`, `supersedes`, `jurisdiction`, `doc_type`, `section_type` and `confidentiality_level`. Eight come from the request; `section_type` (`text` or `table`) is set per chunk.
+
+Session 2 adds:
+
+| Field | Meaning |
+|---|---|
+| header line in `text` | `[doc_id \| title vversion \| section]`. It is embedded with the clause, so a chunk read on its own still says where it is from. |
+| `chunk_id` | `{doc_id}_{clause}_c{nn}`. Built from the clause, not a running position, so inserting a clause does not renumber (and re-embed) the rest. Text outside a numbered clause uses the section number, for example `POL-HL-V3_0_c01` for the front matter. |
+| `clause`, `clause_heading`, `section` | The citable unit. The golden Q&A set cites sources as `{doc_id, clause}`. |
+| `parent_id` | Key of the whole section in the parent collection: `{doc_id}_s{NN}`. |
+| `checksum` | SHA-256 of text + metadata (including `embedding_model`). Ingestion skips a chunk whose stored checksum matches. |
+
+### The parent record
+
+Each section is stored once, as plain text, in the collection named by `MONGODB_PARENT_COLLECTION` (default `policy_sections`). It has no embedding. The read path (Session 4) will search the children and return the parent.
+
+```json
+{
+  "_id": "POL-HL-V3_s06",
+  "page_content": "[POL-HL-V3 | NexaHome Loan Policy v3.0 | 6. Fees and charges]\n6.1 General. ...\n6.2 Processing fee. ...\n6.5 Other costs. ...",
+  "parent_id": "POL-HL-V3_s06",
+  "section": "6. Fees and charges",
+  "doc_id": "POL-HL-V3",
+  "policy_version": "3.0",
+  "effective_date": "2025-10-01",
+  "...": "the other document-level fields"
+}
+```
 
 ### Where the metadata comes from
 
@@ -330,7 +398,7 @@ flowchart LR
     ENV[".env"] -->|"institution, jurisdiction,<br/>confidentiality_level"| REQ
     PFX["doc_id prefix"] -->|"doc_type"| REQ
     REQ -->|"model_dump"| META["chunk metadata"]
-    PIPE["pipeline"] -->|"chunk_id, section_type,<br/>embedding_model"| META
+    PIPE["pipeline"] -->|"chunk_id, parent_id, clause,<br/>section_type, embedding_model,<br/>checksum"| META
 ```
 
 ---
@@ -377,10 +445,12 @@ These have defaults and are optional:
 | Variable | Default | Meaning |
 |---|---|---|
 | `VECTOR_INDEX_NAME` | `policy_chunks_v1` | Must match the index you create in Atlas |
+| `MONGODB_PARENT_COLLECTION` | `policy_sections` | Collection that holds whole sections (parent documents) |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Pinned; never mix models in one index |
 | `EMBEDDING_DIMENSIONS` | `1536` | Must match the Atlas index |
 | `EMBEDDING_BATCH_SIZE` | `100` | Chunks per embedding request |
-| `CHUNK_MAX_CHARACTERS` | `1200` | Upper bound for one chunk |
+| `CHUNK_MAX_CHARACTERS` | `1200` | Target size. Only a clause above it is split; a table can exceed it |
+| `CHUNK_OVERLAP_CHARACTERS` | `150` | Text repeated between the pieces of a split clause |
 | `LOG_LEVEL` | `INFO` | `structlog` level |
 | `DD_TRACE_ENABLED` | `false` | Turn on only with a Datadog Agent running |
 
@@ -455,6 +525,7 @@ import asyncio
 from pathlib import Path
 
 from langchain_core.embeddings import DeterministicFakeEmbedding
+from langchain_core.stores import InMemoryStore
 from langchain_core.vectorstores import InMemoryVectorStore
 
 from app.chains.ingestion import build_ingestion_chain
@@ -468,14 +539,17 @@ settings = Settings(
     institution="NexaBank", jurisdiction="IN", confidentiality_level="internal",
 )
 store = InMemoryVectorStore(DeterministicFakeEmbedding(size=1536))
-chain = build_ingestion_chain(store, settings)
+chain = build_ingestion_chain(store, InMemoryStore(), settings)
 
 
 async def main() -> None:
     register = Path("nexa_synthetic_data/document_register.json")
     for request in requests_from_register(register, settings):
         response = await chain.ainvoke({"request": request})
-        print(f"{response.doc_id:<13}{response.chunk_count:>4} chunks")
+        print(
+            f"{response.doc_id:<13}{response.chunk_count:>4} chunks,"
+            f"{response.embedded_count:>4} embedded"
+        )
     print("total:", len(store.store))
 
 
@@ -485,40 +559,45 @@ asyncio.run(main())
 Expected output:
 
 ```text
-POL-HL-V1      21 chunks
-POL-HL-V2      21 chunks
-POL-HL-V3      21 chunks
-CIR-2026-07    10 chunks
-POL-PL-V1      13 chunks
-POL-LAP-V1     14 chunks
-POL-AL-V1      13 chunks
-POL-OPS-001    15 chunks
-total: 128
+POL-HL-V1      31 chunks,  31 embedded
+POL-HL-V2      31 chunks,  31 embedded
+POL-HL-V3      32 chunks,  32 embedded
+CIR-2026-07     8 chunks,   8 embedded
+POL-PL-V1      18 chunks,  18 embedded
+POL-LAP-V1     19 chunks,  19 embedded
+POL-AL-V1      17 chunks,  17 embedded
+POL-OPS-001    21 chunks,  21 embedded
+total: 177
 ```
 
-The notebook [phase1_session1_ingestion.ipynb](phase1_session1_ingestion.ipynb) does the same thing step by step and falls back to this offline mode automatically.
+The notebook [phase1_session2_chunking.ipynb](phase1_session2_chunking.ipynb) does the same thing step by step and falls back to this offline mode automatically.
 
 #### What a successful full run looks like
 
 One JSON log line per document, eight in total:
 
 ```json
-{"doc_id": "POL-HL-V3", "chunk_count": 21, "embedding_model": "text-embedding-3-small", "policy_version": "3.0", "effective_date": "2025-10-01", "event": "document_ingested", "level": "info", "timestamp": "..."}
+{"doc_id": "POL-HL-V3", "chunk_count": 32, "embedded_count": 32, "unchanged_count": 0, "stale_chunks_removed": 0, "embedding_model": "text-embedding-3-small", "policy_version": "3.0", "effective_date": "2025-10-01", "event": "document_ingested", "level": "info", "timestamp": "..."}
 ```
 
 Expected chunk counts for the synthetic corpus:
 
 | Document | Chunks |
 |---|---|
-| POL-HL-V1, POL-HL-V2, POL-HL-V3 | 21 each |
-| CIR-2026-07 | 10 |
-| POL-PL-V1 | 13 |
-| POL-LAP-V1 | 14 |
-| POL-AL-V1 | 13 |
-| POL-OPS-001 | 15 |
-| **Total** | **128** |
+| POL-HL-V1, POL-HL-V2 | 31 each |
+| POL-HL-V3 | 32 |
+| CIR-2026-07 | 8 |
+| POL-PL-V1 | 18 |
+| POL-LAP-V1 | 19 |
+| POL-AL-V1 | 17 |
+| POL-OPS-001 | 21 |
+| **Total** | **177** |
 
-Running it again is safe. Chunk IDs are deterministic, so existing chunks are replaced rather than duplicated.
+Each count is the document's numbered clauses plus one front-matter chunk. The parent collection ends up with 80 sections.
+
+Running it again is safe and cheap. A second run logs `"embedded_count": 0` for every document, because every stored checksum matches and no embedding call is made.
+
+**Upgrading a collection that Session 1 filled:** the chunk IDs changed from `POL-HL-V3_c007` to `POL-HL-V3_3.4_c01`. The first Session 2 run embeds all 177 new chunks and reports the 128 old ones under `stale_chunks_removed` as it deletes them. No manual cleanup is needed.
 
 ### Troubleshooting
 
@@ -552,14 +631,14 @@ requests = requests_from_register(Path("nexa_synthetic_data/document_register.js
 # Ingest only the circular
 circular = [r for r in requests if r.doc_id == "CIR-2026-07"]
 responses = asyncio.run(ingest(circular))
-print(responses[0].chunk_count)  # 10
+print(responses[0].chunk_count)  # 8
 ```
 
 To ingest a document that is not in the register, build an `IngestRequest` yourself and pass it to `ingest`. All fields except `product_id`, `effective_to` and `supersedes` are required.
 
 ### Walk through it as a lesson: the notebook
 
-[phase1_session1_ingestion.ipynb](phase1_session1_ingestion.ipynb) is the teaching version of this same pipeline. It does not import `app/`, and it maps each section to the file it mirrors. Open it with the project's environment as the kernel and run it from the project root.
+There is one notebook per session: [phase1_session1_ingestion.ipynb](phase1_session1_ingestion.ipynb) (architecture and the Session 1 baseline) and [phase1_session2_chunking.ipynb](phase1_session2_chunking.ipynb) (tokens, embeddings, clause-aware chunking, parent documents, checksums, scaling arithmetic). Each is a teaching version of this same pipeline. It does not import `app/`, and it maps each section to the file it mirrors. Open it with the project's environment as the kernel and run it from the project root.
 
 If `MONGODB_URI` and `OPENAI_API_KEY` are not set, it switches to **offline mode** (in-memory store, fake embeddings). Every stage still runs, but the similarity ranking in the last section is arbitrary. With real credentials, that section shows several policy versions competing for the same question, which is the reason version metadata exists.
 
@@ -567,7 +646,8 @@ If `MONGODB_URI` and `OPENAI_API_KEY` are not set, it switches to **offline mode
 
 | To change | Where |
 |---|---|
-| Chunk size | `CHUNK_MAX_CHARACTERS` in `.env`, no code change |
+| Chunk size and overlap | `CHUNK_MAX_CHARACTERS`, `CHUNK_OVERLAP_CHARACTERS` in `.env`, no code change |
+| What counts as a clause or section | The two regular expressions at the top of [app/chains/chunking.py](app/chains/chunking.py) |
 | Embedding model or dimension | `.env`, then create a new Atlas index version and re-embed |
 | The corpus | Add the file to the register, then re-run the command |
 | What is stored per chunk | `enrich` inside [app/chains/ingestion.py](app/chains/ingestion.py) |
@@ -578,9 +658,9 @@ If `MONGODB_URI` and `OPENAI_API_KEY` are not set, it switches to **offline mode
 ## 8. Testing and quality checks
 
 ```bash
-uv run pytest -q              # 6 tests, no network or credentials needed
+uv run pytest -q              # 15 tests, no network or credentials needed
 uv run ruff check app tests   # lint
-uv run mypy app               # type check
+uv run mypy app tests         # type check
 ```
 
 The tests run the real parser and chain over your synthetic PDFs, with an in-memory vector store and fake embeddings in place of Atlas and OpenAI.
@@ -588,13 +668,22 @@ The tests run the real parser and chain over your synthetic PDFs, with an in-mem
 | Test | What it proves |
 |---|---|
 | `test_register_maps_to_requests` | The register yields 8 requests with correct dates, types and a null product for the operations policy |
-| `test_every_document_parses_and_chunks` | All 8 PDFs ingest and every chunk has the nine metadata fields |
+| `test_every_document_parses_and_chunks` | All 8 PDFs ingest and every chunk has the nine metadata fields plus `clause`, `parent_id` and `checksum` |
 | `test_version_metadata_is_stamped_on_every_chunk` | Product, version, effective date and `supersedes` appear on every chunk |
-| `test_tables_are_kept_whole` | The FOIR table is one chunk with all three rows intact |
+| `test_tables_are_kept_whole` | The FOIR table is one chunk with all three rows intact, together with the sentence of clause 3.4 that introduces it |
 | `test_running_headers_and_footers_are_dropped` | Page headers and footers do not leak into chunk text |
 | `test_reingesting_is_idempotent` | Ingesting the same document twice leaves the chunk count unchanged |
+| `test_every_registered_clause_is_exactly_one_chunk` | For all 8 documents, the clause chunks match the register's clause list one to one, numbers and headings |
+| `test_every_golden_citation_resolves_to_a_chunk` | Every `{doc_id, clause}` cited by the 97 golden Q&As exists as a chunk |
+| `test_chunk_carries_identity_header_and_clause_id` | Clause 6.2 has the ID `POL-HL-V3_6.2_c01`, starts with the header line, and holds no other clause |
+| `test_oversized_clause_splits_narrative_with_overlap_but_never_the_table` | Above the size limit, narrative splits at sentences with overlap and the table stays whole |
+| `test_parent_section_holds_every_clause_of_the_section` | The parent of clause 6.2 contains clauses 6.1 to 6.5 and nothing from section 7 |
+| `test_reingesting_replaces_parent_sections` | A second ingest leaves the same parent keys, with no duplicate-key error |
+| `test_only_new_or_changed_chunks_are_embedded` | A re-run sends nothing to the embedding model; one stale checksum re-embeds exactly one chunk |
+| `test_changing_the_embedding_model_re_embeds_everything` | A different `embedding_model` changes every checksum |
+| `test_stale_chunks_are_deleted_and_current_ones_kept` | `delete_stale_chunks` removes only the named document's leftover IDs |
 
-What the tests do **not** cover: real embedding quality, Atlas index behaviour, or search results. Those need credentials and are verified by running the ingestion command and checking Atlas.
+What the tests do **not** cover: real embedding quality, Atlas index behaviour, search results, or the write to a live Atlas collection (the stores are in-memory; only `delete_stale_chunks` runs against a mock MongoDB collection). Those need credentials and are verified by running the ingestion command and checking Atlas.
 
 ---
 
@@ -603,19 +692,28 @@ What the tests do **not** cover: real embedding quality, Atlas index behaviour, 
 - **The register drives ingestion, not a folder listing.** `document_register.json` records which documents are authoritative, their effective windows and what supersedes what. Customer uploads in `nexa_synthetic_data/uploads/` are deliberately not indexed as policy.
 - **Version metadata on every chunk.** Similarity search cannot tell a current clause from a superseded one; metadata filters can. This is the main finance-specific design point of the deck.
 - **Tables are kept whole and stored as HTML.** A fee or threshold table flattened to text loses which value belongs to which band.
-- **Deterministic chunk IDs.** `{doc_id}_c{nnn}` makes writes idempotent.
+- **Deterministic chunk IDs keyed by clause.** `{doc_id}_{clause}_c{nn}` makes writes idempotent, and a new clause does not shift the IDs of the clauses after it.
+- **Structure first, size second.** The clause is the unit the policies are written in and the unit the golden Q&A set cites, so it is the chunk. Size rules only apply to a clause over the limit, and never to a table.
+- **Identity header in the embedded text.** Every chunk starts with document, version and section, so a piece of a split clause, or a table, is never anonymous.
+- **Embed the child, store the parent.** Clauses are embedded for precise matching; whole sections sit in a separate, unembedded collection keyed by `parent_id`.
+- **One checksum per chunk, not a timestamp per file.** The hash covers text, metadata and embedding model. A re-saved file with no text change embeds nothing; a model change re-embeds everything.
+- **Retired, not left behind.** After each document, chunks whose IDs were not produced are deleted, so a withdrawn clause cannot keep answering.
 - **`pdfplumber` for PDFs.** Unstructured's fast mode split table cells into stray headings, and its table-aware mode needs poppler, tesseract and large model downloads. `pdfplumber` is lighter and works on born-digital PDFs. Scanned PDFs would need a different parser.
 - **Config in the environment.** Model names and chunk size can change without a redeploy.
 - **Manual Atlas index.** The index definition is version-controlled in `indexes.md` rather than created by code.
 
 ### Known limitations
 
-- Tables land in their own chunk, separate from the sentence that introduces them (for example "3.4 FOIR limit" is in the chunk before its table). Session 2 fixes this with clause-aware chunking.
-- Re-ingesting a document that became shorter leaves its old trailing chunks behind, because nothing deletes IDs that no longer exist.
-- There is no checksum step, so every run re-embeds every chunk.
+- The clause and section patterns fit this corpus ("6. Fees and charges", "6.2 Processing fee. ..."). A document numbered differently would fall into one front-matter chunk per section until the patterns in `chunking.py` are extended.
+- With the default `CHUNK_MAX_CHARACTERS`, no clause in the corpus is over the limit, so the size rule is exercised by a test and the notebook, not by a normal run.
+- The header line is added on top of the size limit, so a chunk can exceed `CHUNK_MAX_CHARACTERS` by the header length.
+- Parent sections are rewritten on every run. They are not embedded, so this costs no model calls.
+- The write is not transactional: a crash between the parent write, the chunk upsert and the stale-chunk delete leaves a mixed state until the next run, which repairs it.
+- Nothing reads the parent collection yet. Parent-document retrieval is shown in the notebook and built into `/retrieve` in Session 4.
 - `section_type` is only `text` or `table`.
 - The Atlas filter fields cover product, jurisdiction, effective date and confidentiality. As-of queries will also need `effective_to` and probably `doc_id`.
-- The pipeline has been tested end to end with fake embeddings and an in-memory store, not against a live Atlas cluster.
+- The pipeline has been tested end to end with fake embeddings and in-memory stores, not against a live Atlas cluster.
+- Scaling beyond a loop (queue, worker pool, sharded index) is covered as design in Session 2, not as code.
 
 ---
 
@@ -623,7 +721,7 @@ What the tests do **not** cover: real embedding quality, Atlas index behaviour, 
 
 ```mermaid
 flowchart LR
-    S1["S1: Architecture +<br/>ingestion"]:::done --> S2["S2: Clause-aware chunking,<br/>parent docs, checksums"]
+    S1["S1: Architecture +<br/>ingestion"]:::done --> S2["S2: Clause-aware chunking,<br/>parent docs, checksums"]:::done
     S2 --> S3["S3: Embeddings and<br/>vector index"]
     S3 --> S4["S4: Retrieval API<br/>/retrieve"]
     S4 --> S5["S5: Failure modes,<br/>Week 1 checkpoint"]
@@ -634,9 +732,9 @@ flowchart LR
 
 | Session | Adds |
 |---|---|
-| 2 | Clause-aware chunking with a `clause` field, parent-document retrieval, checksum-based incremental re-ingest |
+| 2 (done) | Clause-aware chunking with a `clause` field, parent documents, checksum-based incremental re-ingest |
 | 3 | Embedding model and dimension decisions, the Atlas index in depth |
-| 4 | `/retrieve` endpoint (FastAPI) with filters including `as_of`, citations and timings |
+| 4 | `/retrieve` endpoint (FastAPI) with filters including `as_of`, parent-document expansion, citations and timings |
 | 5 | Failure modes and alerts, Week 1 checkpoint |
 | Week 2 | BM25 and reciprocal rank fusion, reranking, context assembly with a chat model, RAGAS and LLM-as-judge evaluation against the golden Q&A set, tracing |
 

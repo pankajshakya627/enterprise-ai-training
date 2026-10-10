@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     mongodb_db: str
     mongodb_collection: str
     vector_index_name: str = "policy_chunks_v1"
+    mongodb_parent_collection: str = "policy_sections"
 
     openai_api_key: SecretStr
     embedding_model: str = "text-embedding-3-small"
@@ -20,6 +21,7 @@ class Settings(BaseSettings):
     embedding_batch_size: int = 100
 
     chunk_max_characters: int = 1200
+    chunk_overlap_characters: int = 150
 
     # Corpus-wide metadata that the document register does not carry.
     institution: str
