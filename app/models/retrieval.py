@@ -26,7 +26,7 @@ class Citation(BaseModel):
 
 
 class RetrieveHit(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     rank: int
     score: float
@@ -36,7 +36,7 @@ class RetrieveHit(BaseModel):
 
 
 class RetrieveTimings(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     search_ms: float
     parent_ms: float
