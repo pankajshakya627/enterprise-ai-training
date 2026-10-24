@@ -322,17 +322,25 @@ def test_agent_reuses_real_phase1_http_route_and_answer_chain(
 
 
 @pytest.mark.parametrize(
-    "failure",
+    "failure,field,number",
     [
-        "timeout",
-        "status",
-        "redirect",
-        "invalid_json",
-        "malformed",
-        "invalid_amendment",
-        "string_rank",
-        "string_timing",
-        "wrong_date",
+        (failure, None, None)
+        for failure in (
+            "timeout",
+            "status",
+            "redirect",
+            "invalid_json",
+            "malformed",
+            "invalid_amendment",
+            "string_rank",
+            "string_timing",
+            "wrong_date",
+        )
+    ]
+    + [
+        ("nonfinite", field, number)
+        for field in ("result_score", "amendment_score", "search_ms", "parent_ms", "total_ms")
+        for number in (float("nan"), float("inf"), float("-inf"))
     ],
 )
 def test_http_retrieval_fails_closed(
@@ -341,10 +349,18 @@ def test_http_retrieval_fails_closed(
     evidence: RetrieveResponse,
     monkeypatch: pytest.MonkeyPatch,
     failure: str,
+    field: str | None,
+    number: float | None,
 ) -> None:
     calls = []
     llm = Mock(spec=BaseChatModel)
-    llm.with_structured_output.return_value = RunnableLambda(lambda _: decision())
+    llm.with_structured_output.side_effect = lambda schema, **_: RunnableLambda(
+        lambda _: (
+            decision()
+            if schema is IntentDecision
+            else AnswerDraft(status="insufficient_evidence", answer="No answer", evidence=[])
+        )
+    )
     monkeypatch.setattr(agent_service, "get_chat_model", lambda _: llm)
 
     def handle(req: httpx.Request) -> httpx.Response:
@@ -368,6 +384,17 @@ def test_http_retrieval_fails_closed(
             body["amendments"][0]["rank"] = "1"
         if failure == "string_timing":
             body["timings"]["total_ms"] = "3"
+        if failure == "nonfinite":
+            assert field is not None and number is not None
+            if field == "result_score":
+                body["results"][0]["score"] = number
+            elif field == "amendment_score":
+                body["amendments"][0]["score"] = number
+            else:
+                body["timings"][field] = number
+            return httpx.Response(
+                200, content=json.dumps(body), headers={"content-type": "application/json"}
+            )
         return httpx.Response(200, json={} if failure == "malformed" else body)
 
     async def run() -> None:
