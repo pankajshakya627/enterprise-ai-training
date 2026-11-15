@@ -115,11 +115,17 @@ def client(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> Iterator[http
             yield client
 
 
+def policy_screen() -> AppTest:
+    app = AppTest.from_file(Path("app/streamlit_app.py").resolve())
+    app.session_state["workspace"] = "Policy chat"
+    return app.run()
+
+
 @pytest.mark.parametrize("decision", ["accepted", "rejected"])
 def test_existing_ui_endpoint_coverage(client: httpx.Client, decision: str) -> None:
     responses: list[httpx.Response] = []
     client.event_hooks["response"].append(responses.append)
-    app = AppTest.from_file(Path("app/streamlit_app.py").resolve()).run()
+    app = policy_screen()
     assert not app.exception
     assert app.radio(key="workspace").value == "Policy chat"
     assert len(app.chat_input) == 1
@@ -196,7 +202,7 @@ def test_ui_reports_service_unavailability(
         raise httpx.ConnectError("private connection details")
 
     monkeypatch.setattr(client, "post", unavailable)
-    app = AppTest.from_file(Path("app/streamlit_app.py").resolve()).run()
+    app = policy_screen()
     app.chat_input[0].set_value("What is the fee?").run()
     assert not app.exception
     assert "unavailable" in app.error[0].value
@@ -226,7 +232,7 @@ def test_live_quality_is_hidden_but_datadog_link_and_evaluation_remain(
         )
     )
     monkeypatch.setattr(answer_api, "answer_with_quality", evaluate)
-    app = AppTest.from_file(Path("app/streamlit_app.py").resolve()).run()
+    app = policy_screen()
     assert app.toggle(key="evaluate_quality").value
     app.text_area(key="quality_reference").input("Reference for this question")
     app.chat_input[0].set_value("Question").run()
@@ -246,7 +252,7 @@ def test_live_quality_is_hidden_but_datadog_link_and_evaluation_remain(
 def test_chat_history_filters_and_feedback_are_isolated(client: httpx.Client) -> None:
     responses: list[httpx.Response] = []
     client.event_hooks["response"].append(responses.append)
-    app = AppTest.from_file(Path("app/streamlit_app.py").resolve()).run()
+    app = policy_screen()
     app.date_input(key="policy_date").set_value(date(2026, 10, 19))
     app.text_input(key="product_id").input("NEXA-HL")
     app.slider(key="source_count").set_value(3)
@@ -304,7 +310,7 @@ def test_failed_question_retries_original_scope(
             503, request=httpx.Request("POST", "http://testserver/answer")
         ),
     )
-    app = AppTest.from_file(Path("app/streamlit_app.py").resolve()).run()
+    app = policy_screen()
     app.text_input(key="product_id").input("NEXA-HL")
     app.chat_input[0].set_value("What is the limit?").run()
     assert app.error
@@ -323,7 +329,7 @@ def test_failed_question_retries_original_scope(
 def test_suggestion_and_blank_input(client: httpx.Client) -> None:
     responses: list[httpx.Response] = []
     client.event_hooks["response"].append(responses.append)
-    app = AppTest.from_file(Path("app/streamlit_app.py").resolve()).run()
+    app = policy_screen()
     app.chat_input[0].set_value("   ").run()
     assert app.warning
     assert not responses
@@ -339,7 +345,7 @@ def test_reference_and_correction_survive_immediate_submission(client: httpx.Cli
 
     responses: list[httpx.Response] = []
     client.event_hooks["response"].append(responses.append)
-    app = AppTest.from_file(Path("app/streamlit_app.py").resolve()).run()
+    app = policy_screen()
     reference = "Expected answer pasted immediately before sending."
     app.date_input[0].set_value(date(2026, 10, 19))
     app.text_area(key="quality_reference").input(reference)
@@ -357,7 +363,7 @@ def test_reference_and_correction_survive_immediate_submission(client: httpx.Cli
 
 
 def test_changing_reviewer_credentials_clears_loaded_records(client: httpx.Client) -> None:
-    app = AppTest.from_file(Path("app/streamlit_app.py").resolve()).run()
+    app = policy_screen()
     app.radio(key="workspace").set_value("Review feedback").run()
     app.text_input(key="reviewer_token").input("reviewer-test-token-000000000000000000").run()
     app.session_state["feedback_records"] = [{"private_test_record": True}]

@@ -15,6 +15,32 @@ inspect quoted sources, and submit feedback. FastAPI serves retrieval, answers,
 live RAGAS evaluation and feedback review. LangChain runs the underlying logic;
 the default answer model is `gpt-6-luna`.
 
+## Unified Agent chat and MCP
+
+**Agent chat** opens by default with one message input for policy questions,
+owned-account transactions, and case or service requests. Missing details produce
+clarification and suggestions. Banking actions require scoped credentials;
+submissions require a different authorized reviewer to approve the exact proposal.
+Policy questions can be asked without banking credentials.
+
+The agent can retrieve policy evidence through the local stdio MCP server and
+use the banking MCP over stdio or authenticated HTTP. The hosted banking endpoint
+supports OAuth with an encrypted local token cache. Configure `.env` from
+[.env.example](.env.example), then follow the
+[chat harness guide](app/agents/README.md#unified-chat-harness),
+[policy MCP guide](app/mcp/README.md), and
+[banking MCP guide](app/mcp/BANKING.md).
+
+```bash
+make run             # Local stack; defaults to local stdio banking MCP
+make run-hosted      # RAG, Agent and UI using configured hosted banking MCP
+make run-mcp         # Policy stdio server, owned by its MCP client
+make mcp-demo        # Read-only policy MCP demo; RAG must be running
+make check-mcp       # Offline policy MCP protocol and failure tests
+```
+
+Earlier milestone notes below describe the implementation at those dates.
+
 ### Phase 1 and Phase 2 training implementation — 27 October 2026
 
 The [session and future-development map](C4-Documentation/phase1-phase2-development-map.md)

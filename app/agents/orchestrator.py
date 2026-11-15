@@ -18,7 +18,13 @@ from app.models.agent import AgentRequest, AgentResponse, IntentDecision, Missin
 from app.models.agent_run import ApprovalDecision, proposal_digest
 from app.models.answer import AnswerResponse
 from app.models.retrieval import RetrieveRequest, RetrieveResponse
-from app.models.validation import SubmittedServiceRequest, ValidationAccess, ValidationResult
+from app.models.validation import (
+    ServiceRequestDetails,
+    SubmittedCase,
+    SubmittedServiceRequest,
+    ValidationAccess,
+    ValidationResult,
+)
 
 
 class AgentState(TypedDict, total=False):
@@ -64,9 +70,12 @@ def build_agent_graph(
     validator: Callable[[AgentRequest, RetrieveResponse], Awaitable[ValidationResult]]
     | None = None,
     access: ValidationAccess | None = None,
-    actioner: Callable[[AgentRequest, ValidationResult, str], Awaitable[SubmittedServiceRequest]]
+    actioner: Callable[
+        [AgentRequest, ValidationResult, str], Awaitable[SubmittedServiceRequest | SubmittedCase]
+    ]
     | None = None,
     checkpointer: BaseCheckpointSaver | None = None,
+    customer_reader: Callable[[AgentRequest], Awaitable[AgentResponse]] | None = None,
 ) -> CompiledStateGraph:
     """Reuse the policy path; optionally pause and execute an approved service request.
 
@@ -109,13 +118,6 @@ def build_agent_graph(
         decision = IntentDecision.model_validate(await classifier.ainvoke(request))
         if decision.intent == "forbidden":
             return {"decision": decision}
-        if (
-            decision.intent == "customer_context"
-            and request.action == "createServiceRequest"
-            and request.action_details is not None
-        ):
-            decision = decision.model_copy(update={"intent": "supported_action"})
-
         missing = list(decision.missing_fields)
         updates = {}
         scope_fields: tuple[MissingField, ...] = ("product_id", "as_of", "customer_id", "action")
@@ -124,7 +126,37 @@ def build_agent_graph(
             if explicit is not None and extracted is not None and explicit != extracted:
                 missing.append(field)
             updates[field] = explicit if explicit is not None else extracted
+        details = request.action_details
+        if decision.request_type is not None:
+            if details is not None and details.request_type != decision.request_type:
+                missing.append("action_details")
+            elif details is None:
+                details = ServiceRequestDetails(request_type=decision.request_type)
+        if details is not None and decision.loan_account_id is not None:
+            if (
+                details.loan_account_id is not None
+                and details.loan_account_id != decision.loan_account_id
+            ):
+                missing.append("action_details")
+            else:
+                details = details.model_copy(update={"loan_account_id": decision.loan_account_id})
+        updates["action_details"] = details
+        for field in ("case_details", "transactions"):
+            supplied, extracted = getattr(request, field), getattr(decision, field)
+            if supplied is not None and extracted is not None and supplied != extracted:
+                missing.append(field)
+            updates[field] = supplied if supplied is not None else extracted
         resolved = AgentRequest.model_validate({**request.model_dump(), **updates})
+        if (resolved.case_details is not None and resolved.action_details is not None) or (
+            resolved.transactions is not None and resolved.action is not None
+        ):
+            missing.append("question")
+        if (
+            decision.intent == "customer_context"
+            and resolved.action == "createServiceRequest"
+            and resolved.action_details is not None
+        ):
+            decision = decision.model_copy(update={"intent": "supported_action"})
         if decision.intent == "policy_question":
             if resolved.as_of is None:
                 missing.append("as_of")
@@ -137,6 +169,16 @@ def build_agent_graph(
             missing.append("customer_id")
         if decision.intent == "supported_action" and resolved.action is None:
             missing.append("action")
+        if (
+            decision.intent == "supported_action"
+            and resolved.action == "createCase"
+            and validator is not None
+            and resolved.action_details is None
+        ):
+            if resolved.as_of is None:
+                missing.append("as_of")
+            if resolved.case_details is None:
+                missing.append("case_details")
         if (
             decision.intent == "supported_action"
             and resolved.action == "createServiceRequest"
@@ -170,12 +212,13 @@ def build_agent_graph(
     async def retrieve(state: AgentState) -> AgentState:
         """Retrieve scoped policy evidence through the configured retrieval integration."""
         request = RetrieveRequest.model_validate(
-            state["request"].model_dump(exclude={"customer_id", "action", "action_details"})
+            state["request"].model_dump(include=set(RetrieveRequest.model_fields))
         )
         if state["decision"].intent == "supported_action":
             details = state["request"].action_details
-            assert details is not None
-            opt_in = details.request_type == "OPT_IN_CIR_2026_07_PART_PREPAY"
+            opt_in = (
+                details is not None and details.request_type == "OPT_IN_CIR_2026_07_PART_PREPAY"
+            )
             request = request.model_copy(
                 update={
                     "query": (
@@ -199,7 +242,7 @@ def build_agent_graph(
         }
 
     def clarify(state: AgentState) -> AgentState:
-        """Return a fixed request for the unresolved scope fields."""
+        """Ask for unresolved scope and suggest supported options without choosing for the user."""
         labels: dict[MissingField, str] = {
             "product_id": "the product",
             "as_of": "the policy lookup date (YYYY-MM-DD)",
@@ -207,14 +250,41 @@ def build_agent_graph(
             "action": "the requested action",
             "action_details": "the required action details",
             "question": "the specific question or request",
+            "case_details": "the case category, priority, summary and customer ID",
+            "transactions": "the transaction account and date/limit scope",
+        }
+        guidance: dict[MissingField, str] = {
+            "product_id": "Choose NexaHome (NEXA-HL), NexaFlex (NEXA-PL), "
+            "NexaDrive (NEXA-AL), or NexaProperty Plus (NEXA-LAP).",
+            "as_of": "Provide the policy lookup date as YYYY-MM-DD; it is separate from "
+            "the loan sanction date. In the workspace, update the Policy date selector.",
+            "customer_id": "Provide your authorized synthetic customer ID in NXC-0000 format.",
+            "action": "Ask a policy question or request a statement copy, callback, re-KYC "
+            "reminder, interest certificate, or CIR-2026-07 prepayment opt-in.",
+            "action_details": "Choose a statement copy, callback, re-KYC reminder, interest "
+            "certificate, or CIR-2026-07 prepayment opt-in. Certificates and opt-ins also "
+            "need your loan account ID. Confirm one request type and one loan if they conflict.",
+            "question": "Ask about published policy or request one supported service at a time: "
+            "a case, owned-account transactions, statement copy, callback, re-KYC reminder, interest certificate, or prepayment opt-in.",
+            "case_details": "For a loan enquiry, provide the customer ID, category LOAN_ENQUIRY, priority LOW, NORMAL or HIGH, and a short description. A different reviewer must approve before submission.",
+            "transactions": "Provide your customer ID and an owned account ID if you have several accounts, plus the requested date range and maximum count.",
         }
         missing = state["decision"].missing_fields
+        details = state["request"].action_details
+        if details is not None:
+            guidance["action_details"] = f"Confirm the {details.request_type} request type. " + (
+                "Provide or confirm the loan account ID belonging to the selected customer."
+                if details.request_type
+                in ("OPT_IN_CIR_2026_07_PART_PREPAY", "INTEREST_CERTIFICATE")
+                else "Confirm any supplied loan account ID; it must belong to the selected customer."
+            )
         return {
             "response": AgentResponse(
                 intent="missing_information",
                 status="needs_clarification",
                 message="Please provide or confirm " + ", ".join(labels[f] for f in missing) + ".",
                 missing_fields=missing,
+                suggestions=[guidance[field] for field in missing],
             )
         }
 
@@ -229,8 +299,10 @@ def build_agent_graph(
             )
         }
 
-    def customer_context(state: AgentState) -> AgentState:
-        """Report that general customer-context tools are unavailable in this stage."""
+    async def customer_context(state: AgentState) -> AgentState:
+        """Read supported customer facts or report an unavailable customer integration."""
+        if customer_reader is not None and state["request"].transactions is not None:
+            return {"response": await customer_reader(state["request"])}
         return {
             "response": AgentResponse(
                 intent="customer_context",
@@ -243,13 +315,27 @@ def build_agent_graph(
     def supported_action(state: AgentState) -> AgentState:
         """Check scoped service-request capability before retrieving policy evidence."""
         request = state["request"]
-        if validator is not None and request.action_details is not None:
+        if validator is not None and (
+            request.action_details is not None or request.case_details is not None
+        ):
+            is_case = (
+                request.action == "createCase"
+                and request.case_details is not None
+                and request.case_details.customer_id == request.customer_id
+                and request.action_details is None
+            )
+            is_service = (
+                request.action == "createServiceRequest"
+                and request.action_details is not None
+                and request.case_details is None
+            )
             if (
                 access is None
                 or request.customer_id not in access.customer_ids
-                or request.action != "createServiceRequest"
+                or not (is_case or is_service)
                 or (
-                    request.action_details.request_type == "OPT_IN_CIR_2026_07_PART_PREPAY"
+                    request.action_details is not None
+                    and request.action_details.request_type == "OPT_IN_CIR_2026_07_PART_PREPAY"
                     and request.product_id != "NEXA-HL"
                 )
             ):
@@ -257,7 +343,7 @@ def build_agent_graph(
                     "response": AgentResponse(
                         intent="supported_action",
                         status="blocked",
-                        message="An authorized customer and supported service-request scope are required.",
+                        message="An authorized customer and supported banking request are required.",
                     )
                 }
             return {}
@@ -344,9 +430,12 @@ def build_agent_graph(
             "response": AgentResponse(
                 intent="supported_action",
                 status="submitted",
-                message="The bank accepted the service request. It has not necessarily completed it.",
+                message="The bank created the approved case."
+                if isinstance(result, SubmittedCase)
+                else "The bank accepted the service request. It has not necessarily completed it.",
                 validation=state["validation"],
-                submission=result,
+                submission=result if isinstance(result, SubmittedServiceRequest) else None,
+                case_submission=result if isinstance(result, SubmittedCase) else None,
             )
         }
 

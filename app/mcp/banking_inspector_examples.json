@@ -1,0 +1,369 @@
+{
+  "customer_id": "NXC-0010",
+  "case_id_in_examples": "NXCASE-000001",
+  "loan_id_in_examples": "NXL-HL-0010",
+  "instructions": "Select tool, enable Edit as JSON, and paste only the arguments object. In form mode, request is the inner object. Replace returned IDs and choose keys before the exact grant is issued. These are payload examples, not credentials or grants.",
+  "examples": [
+    {
+      "name": "list_customer_accounts",
+      "tool": "list_accounts",
+      "arguments": {
+        "request": {
+          "customer_id": "NXC-0010"
+        }
+      },
+      "note": "Read first to confirm the current loan IDs. Requires customer read scope; no write grant."
+    },
+    {
+      "name": "create_case_loan_enquiry",
+      "tool": "create_case",
+      "arguments": {
+        "request": {
+          "payload": {
+            "customer_id": "NXC-0010",
+            "category": "LOAN_ENQUIRY",
+            "priority": "NORMAL",
+            "summary": "Customer requests a manual review of a home-loan enquiry.",
+            "related_application_id": null,
+            "channel": "ASSISTANT"
+          },
+          "idempotency_key": "inspector-case-20261113-loan_enquiry"
+        }
+      },
+      "note": "Use a fresh key for a new case. Save the case_id returned by this call; reuse this key only for an unchanged retry."
+    },
+    {
+      "name": "create_case_kyc_issue",
+      "tool": "create_case",
+      "arguments": {
+        "request": {
+          "payload": {
+            "customer_id": "NXC-0010",
+            "category": "KYC_ISSUE",
+            "priority": "NORMAL",
+            "summary": "Customer requests help resolving a KYC verification mismatch.",
+            "related_application_id": null,
+            "channel": "ASSISTANT"
+          },
+          "idempotency_key": "inspector-case-20261113-kyc_issue"
+        }
+      },
+      "note": "Use a fresh key for a new case. Save the case_id returned by this call; reuse this key only for an unchanged retry."
+    },
+    {
+      "name": "create_case_fee_waiver_request",
+      "tool": "create_case",
+      "arguments": {
+        "request": {
+          "payload": {
+            "customer_id": "NXC-0010",
+            "category": "FEE_WAIVER_REQUEST",
+            "priority": "NORMAL",
+            "summary": "Customer requests manual consideration of a fee waiver; no waiver is promised.",
+            "related_application_id": null,
+            "channel": "ASSISTANT"
+          },
+          "idempotency_key": "inspector-case-20261113-fee_waiver_request"
+        }
+      },
+      "note": "Use a fresh key for a new case. Save the case_id returned by this call; reuse this key only for an unchanged retry."
+    },
+    {
+      "name": "create_case_complaint",
+      "tool": "create_case",
+      "arguments": {
+        "request": {
+          "payload": {
+            "customer_id": "NXC-0010",
+            "category": "COMPLAINT",
+            "priority": "NORMAL",
+            "summary": "Customer reports a delay receiving a requested statement copy.",
+            "related_application_id": null,
+            "channel": "ASSISTANT"
+          },
+          "idempotency_key": "inspector-case-20261113-complaint"
+        }
+      },
+      "note": "Use a fresh key for a new case. Save the case_id returned by this call; reuse this key only for an unchanged retry."
+    },
+    {
+      "name": "create_case_suspected_fraud",
+      "tool": "create_case",
+      "arguments": {
+        "request": {
+          "payload": {
+            "customer_id": "NXC-0010",
+            "category": "SUSPECTED_FRAUD",
+            "priority": "HIGH",
+            "summary": "Synthetic suspected unauthorized activity requires specialist review.",
+            "related_application_id": null,
+            "channel": "ASSISTANT"
+          },
+          "idempotency_key": "inspector-case-20261113-suspected_fraud"
+        }
+      },
+      "note": "Use a fresh key for a new case. Save the case_id returned by this call; reuse this key only for an unchanged retry."
+    },
+    {
+      "name": "create_case_document_anomaly",
+      "tool": "create_case",
+      "arguments": {
+        "request": {
+          "payload": {
+            "customer_id": "NXC-0010",
+            "category": "DOCUMENT_ANOMALY",
+            "priority": "HIGH",
+            "summary": "Submitted synthetic documents contain inconsistent information.",
+            "related_application_id": null,
+            "channel": "ASSISTANT"
+          },
+          "idempotency_key": "inspector-case-20261113-document_anomaly"
+        }
+      },
+      "note": "Use a fresh key for a new case. Save the case_id returned by this call; reuse this key only for an unchanged retry."
+    },
+    {
+      "name": "create_case_other",
+      "tool": "create_case",
+      "arguments": {
+        "request": {
+          "payload": {
+            "customer_id": "NXC-0010",
+            "category": "OTHER",
+            "priority": "NORMAL",
+            "summary": "Customer requests assistance with a service issue requiring manual review.",
+            "related_application_id": null,
+            "channel": "ASSISTANT"
+          },
+          "idempotency_key": "inspector-case-20261113-other"
+        }
+      },
+      "note": "Use a fresh key for a new case. Save the case_id returned by this call; reuse this key only for an unchanged retry."
+    },
+    {
+      "name": "get_case",
+      "tool": "get_case",
+      "arguments": {
+        "request": {
+          "customer_id": "NXC-0010",
+          "case_id": "NXCASE-000001"
+        }
+      },
+      "note": "Replace case_id with the ID returned by your create_case call. This sample ID may no longer exist after a mock restart."
+    },
+    {
+      "name": "add_case_note",
+      "tool": "add_case_note",
+      "arguments": {
+        "request": {
+          "customer_id": "NXC-0010",
+          "case_id": "NXCASE-000001",
+          "payload": {
+            "text": "Customer confirmed the statement-copy issue. Please investigate and arrange follow-up."
+          },
+          "idempotency_key": "inspector-note-20261113-001"
+        }
+      },
+      "note": "Replace case_id before issuing the exact grant. A new note needs a new operation key; an unchanged retry keeps its original key."
+    },
+    {
+      "name": "escalate_case_complaint",
+      "tool": "escalate_case",
+      "arguments": {
+        "request": {
+          "customer_id": "NXC-0010",
+          "case_id": "NXCASE-000001",
+          "payload": {
+            "reason": "COMPLAINT",
+            "summary": "The synthetic customer complaint requires review by the complaints team.",
+            "preferred_contact": "CALLBACK"
+          },
+          "idempotency_key": "inspector-esc-20261113-complaint"
+        }
+      },
+      "note": "Replace case_id before issuing the grant. Use a fresh case for each escalation example: a case can only be escalated once. Retry the same escalation with its original key."
+    },
+    {
+      "name": "escalate_case_fee_waiver_or_special_rate",
+      "tool": "escalate_case",
+      "arguments": {
+        "request": {
+          "customer_id": "NXC-0010",
+          "case_id": "NXCASE-000001",
+          "payload": {
+            "reason": "FEE_WAIVER_OR_SPECIAL_RATE",
+            "summary": "The customer asks for a fee exception; refer for authorized review without promising approval.",
+            "preferred_contact": "CALLBACK"
+          },
+          "idempotency_key": "inspector-esc-20261113-fee_waiver_or_special_rate"
+        }
+      },
+      "note": "Replace case_id before issuing the grant. Use a fresh case for each escalation example: a case can only be escalated once. Retry the same escalation with its original key."
+    },
+    {
+      "name": "escalate_case_suspected_fraud",
+      "tool": "escalate_case",
+      "arguments": {
+        "request": {
+          "customer_id": "NXC-0010",
+          "case_id": "NXCASE-000001",
+          "payload": {
+            "reason": "SUSPECTED_FRAUD",
+            "summary": "Synthetic suspected unauthorized activity requires urgent specialist review.",
+            "preferred_contact": "CALLBACK"
+          },
+          "idempotency_key": "inspector-esc-20261113-suspected_fraud"
+        }
+      },
+      "note": "Replace case_id before issuing the grant. Use a fresh case for each escalation example: a case can only be escalated once. Retry the same escalation with its original key."
+    },
+    {
+      "name": "escalate_case_hardship",
+      "tool": "escalate_case",
+      "arguments": {
+        "request": {
+          "customer_id": "NXC-0010",
+          "case_id": "NXCASE-000001",
+          "payload": {
+            "reason": "HARDSHIP",
+            "summary": "The customer reports financial hardship and requests specialist assistance.",
+            "preferred_contact": "CALLBACK"
+          },
+          "idempotency_key": "inspector-esc-20261113-hardship"
+        }
+      },
+      "note": "Replace case_id before issuing the grant. Use a fresh case for each escalation example: a case can only be escalated once. Retry the same escalation with its original key."
+    },
+    {
+      "name": "escalate_case_kyc_discrepancy",
+      "tool": "escalate_case",
+      "arguments": {
+        "request": {
+          "customer_id": "NXC-0010",
+          "case_id": "NXCASE-000001",
+          "payload": {
+            "reason": "KYC_DISCREPANCY",
+            "summary": "The synthetic customer KYC records contain discrepancies requiring manual review.",
+            "preferred_contact": "CALLBACK"
+          },
+          "idempotency_key": "inspector-esc-20261113-kyc_discrepancy"
+        }
+      },
+      "note": "Replace case_id before issuing the grant. Use a fresh case for each escalation example: a case can only be escalated once. Retry the same escalation with its original key."
+    },
+    {
+      "name": "escalate_case_upload_with_embedded_instructions",
+      "tool": "escalate_case",
+      "arguments": {
+        "request": {
+          "customer_id": "NXC-0010",
+          "case_id": "NXCASE-000001",
+          "payload": {
+            "reason": "UPLOAD_WITH_EMBEDDED_INSTRUCTIONS",
+            "summary": "An uploaded synthetic document contains embedded instructions; refer for manual review.",
+            "preferred_contact": "CALLBACK"
+          },
+          "idempotency_key": "inspector-esc-20261113-upload_with_embedded_instructions"
+        }
+      },
+      "note": "Replace case_id before issuing the grant. Use a fresh case for each escalation example: a case can only be escalated once. Retry the same escalation with its original key."
+    },
+    {
+      "name": "escalate_case_out_of_scope_request",
+      "tool": "escalate_case",
+      "arguments": {
+        "request": {
+          "customer_id": "NXC-0010",
+          "case_id": "NXCASE-000001",
+          "payload": {
+            "reason": "OUT_OF_SCOPE_REQUEST",
+            "summary": "The customer request exceeds the advisory scope and requires an authorized specialist.",
+            "preferred_contact": "CALLBACK"
+          },
+          "idempotency_key": "inspector-esc-20261113-out_of_scope_request"
+        }
+      },
+      "note": "Replace case_id before issuing the grant. Use a fresh case for each escalation example: a case can only be escalated once. Retry the same escalation with its original key."
+    },
+    {
+      "name": "service_request_statement_copy",
+      "tool": "create_service_request",
+      "arguments": {
+        "request": {
+          "payload": {
+            "request_type": "STATEMENT_COPY",
+            "loan_account_id": null,
+            "notes": "Please provide a copy of my account statement.",
+            "customer_id": "NXC-0010"
+          },
+          "idempotency_key": "inspector-sr-20261113-statement_copy"
+        }
+      },
+      "note": "Requires the exact application-issued write grant. Ordinary token-only Inspector sessions are read-only. Use the existing owner/reviewer workflow for submission; confirm live loan ownership and eligibility for loan-specific requests."
+    },
+    {
+      "name": "service_request_callback",
+      "tool": "create_service_request",
+      "arguments": {
+        "request": {
+          "payload": {
+            "request_type": "CALLBACK",
+            "loan_account_id": null,
+            "notes": "Please arrange a callback about my service enquiry.",
+            "customer_id": "NXC-0010"
+          },
+          "idempotency_key": "inspector-sr-20261113-callback"
+        }
+      },
+      "note": "Requires the exact application-issued write grant. Ordinary token-only Inspector sessions are read-only. Use the existing owner/reviewer workflow for submission; confirm live loan ownership and eligibility for loan-specific requests."
+    },
+    {
+      "name": "service_request_re_kyc_reminder",
+      "tool": "create_service_request",
+      "arguments": {
+        "request": {
+          "payload": {
+            "request_type": "RE_KYC_REMINDER",
+            "loan_account_id": null,
+            "notes": "Please arrange a reminder about the re-KYC process.",
+            "customer_id": "NXC-0010"
+          },
+          "idempotency_key": "inspector-sr-20261113-re_kyc_reminder"
+        }
+      },
+      "note": "Requires the exact application-issued write grant. Ordinary token-only Inspector sessions are read-only. Use the existing owner/reviewer workflow for submission; confirm live loan ownership and eligibility for loan-specific requests."
+    },
+    {
+      "name": "service_request_opt_in_cir_2026_07_part_prepay",
+      "tool": "create_service_request",
+      "arguments": {
+        "request": {
+          "payload": {
+            "request_type": "OPT_IN_CIR_2026_07_PART_PREPAY",
+            "loan_account_id": "NXL-HL-0010",
+            "notes": "Please register my request to opt in under CIR-2026-07 for the selected loan.",
+            "customer_id": "NXC-0010"
+          },
+          "idempotency_key": "inspector-sr-20261113-opt_in_cir_2026_07_part_prepay"
+        }
+      },
+      "note": "Requires the exact application-issued write grant. Ordinary token-only Inspector sessions are read-only. Use the existing owner/reviewer workflow for submission; confirm live loan ownership and eligibility for loan-specific requests."
+    },
+    {
+      "name": "service_request_interest_certificate",
+      "tool": "create_service_request",
+      "arguments": {
+        "request": {
+          "payload": {
+            "request_type": "INTEREST_CERTIFICATE",
+            "loan_account_id": "NXL-HL-0010",
+            "notes": "Please provide an interest certificate for the selected loan.",
+            "customer_id": "NXC-0010"
+          },
+          "idempotency_key": "inspector-sr-20261113-interest_certificate"
+        }
+      },
+      "note": "Requires the exact application-issued write grant. Ordinary token-only Inspector sessions are read-only. Use the existing owner/reviewer workflow for submission; confirm live loan ownership and eligibility for loan-specific requests."
+    }
+  ]
+}

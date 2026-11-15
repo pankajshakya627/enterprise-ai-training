@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, HttpUrl, SecretStr, field_validator, model_validator
@@ -166,8 +167,17 @@ class AgentSettings(BaseSettings):
 
     Attributes:
         rag_base_url: RAG HTTP endpoint used by the agent retrieval adapter.
+        agent_retrieval_transport: Explicit HTTP or local MCP retrieval integration.
         agent_http_timeout_seconds: Deadline for each RAG or banking HTTP request.
         agent_run_timeout_seconds: Deadline for one graph start or resume operation.
+        banking_transport: MCP by default; HTTP is explicit compatibility.
+        banking_mcp_transport: Stdio or authenticated HTTP between the Agent and banking MCP.
+        banking_mcp_url: HTTP MCP endpoint; defaults to http://127.0.0.1:9002/mcp.
+        banking_mcp_port: Local HTTP listener port, from 1024 to 65535; defaults to 9002.
+        banking_mcp_token: Private HTTP connection token, at least 32 characters.
+        banking_mcp_signing_key: Private request-signing key, at least 32 characters.
+        banking_mcp_customer_ids: Customer scope for token-only Inspector sessions.
+        banking_mcp_write_grant: Private exact-operation binding supplied by the trusted launcher.
         banking_base_url: Banking API destination bound to durable operation recovery.
         banking_api_token: Secret upstream banking caller credential used for operation identity.
         agent_validation_token: Optional legacy training credential, excluded from durable-run ownership.
@@ -183,8 +193,20 @@ class AgentSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", hide_input_in_errors=True)
 
     rag_base_url: HttpUrl = HttpUrl("http://127.0.0.1:8000/")
+    agent_retrieval_transport: Literal["http", "mcp"] = "http"
     agent_http_timeout_seconds: float = Field(default=60, gt=0, le=300)
     agent_run_timeout_seconds: float = Field(default=180, gt=0, le=600)
+    banking_transport: Literal["http", "mcp"] = "mcp"
+    banking_mcp_transport: Literal["stdio", "http"] = "stdio"
+    banking_mcp_auth_mode: Literal["token", "oauth"] = "token"
+    banking_mcp_url: HttpUrl = HttpUrl("http://127.0.0.1:9002/mcp")
+    banking_mcp_port: int = Field(default=9002, ge=1024, le=65535)
+    banking_mcp_token: SecretStr | None = Field(default=None, min_length=32)
+    banking_mcp_signing_key: SecretStr | None = Field(default=None, min_length=32)
+    banking_mcp_customer_ids: frozenset[str] = Field(default_factory=frozenset)
+    banking_mcp_write_grant: SecretStr | None = Field(default=None, exclude=True)
+    banking_mcp_oauth_directory: Path = Path.home() / ".local/share/nexa-banking-mcp/oauth"
+    banking_mcp_oauth_storage_key: SecretStr | None = None
     banking_base_url: HttpUrl = HttpUrl("http://127.0.0.1:8080/")
     banking_api_token: SecretStr | None = Field(default=None, min_length=1)
     agent_validation_token: SecretStr | None = Field(default=None, min_length=32)
@@ -218,7 +240,15 @@ class AgentSettings(BaseSettings):
             )
         return self
 
-    @field_validator("banking_api_token", "agent_validation_token", mode="before")
+    @field_validator(
+        "banking_api_token",
+        "agent_validation_token",
+        "banking_mcp_write_grant",
+        "banking_mcp_token",
+        "banking_mcp_signing_key",
+        "banking_mcp_oauth_storage_key",
+        mode="before",
+    )
     @classmethod
     def empty_validation_token(cls, value: object) -> object:
         """Normalize an empty banking or legacy agent token to an unconfigured value."""

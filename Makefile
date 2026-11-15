@@ -5,11 +5,15 @@ RUN = $(UV) run --locked --no-sync
 AI_REPORT ?= app/evaluation/reports/phase1-current.json
 AI_BASELINE ?= evaluation/datasets/phase1_dense_baseline.json
 ENV_FILE ?= .env
+MCP_OUTPUT ?= /tmp/nexa-mcp-demo.json
 APP_RUN = $(RUN) --env-file "$(ENV_FILE)"
 RAG_COMMAND = $(APP_RUN) env DD_SERVICE=nexaassist-api ddtrace-run python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 BANK_COMMAND = $(APP_RUN) env DD_SERVICE=nexaassist-bank ddtrace-run python -m uvicorn server:app --app-dir nexa_synthetic_data/api/mock_server --host 127.0.0.1 --port 8080
 AGENT_COMMAND = $(APP_RUN) env DD_SERVICE=nexaassist-agent ddtrace-run python -m uvicorn app.agent_main:app --host 127.0.0.1 --port 8001
 UI_COMMAND = $(APP_RUN) env DD_SERVICE=nexaassist-ui ddtrace-run python -m streamlit run app/streamlit_app.py --server.address 127.0.0.1 --server.port 8501 --server.headless true
+WITH_LOCAL_BANK ?= 1
+WITH_BANKING_MCP ?= 0
+BANKING_MCP_COMMAND = $(APP_RUN) env BANKING_MCP_TRANSPORT=http DD_SERVICE=nexaassist-banking-mcp ddtrace-run python -m app.mcp.banking_server
 COMPOSE = docker compose --env-file "$(ENV_FILE)"
 
 .PHONY: check-fast check-task check-full check-ai
@@ -36,6 +40,7 @@ check-ai:
 
 .PHONY: help setup check-env prereqs run run-all run-rag run-bank run-agent run-ui
 .PHONY: health ingest docker-ready datadog-up datadog-down reranker-up reranker-down
+.PHONY: run-mcp mcp-demo mcp-inspect check-mcp run-http run-banking-mcp check-http-mcp
 
 help:
 	@printf '%s\n' \
@@ -43,10 +48,17 @@ help:
 	  'make prereqs        Check installed runtime dependencies and settings' \
 	  'make run            Run RAG, bank, Agent and UI together; Ctrl+C stops them' \
 	  'make run-all        Alias for make run' \
+	  'make run-hosted     Run RAG, Agent and UI using the configured Horizon/Render bank' \
+	  'make run-http       Run the stack with banking MCP over HTTP on :9002' \
+	  'make run-banking-mcp  Run the authenticated HTTP banking MCP server' \
 	  'make run-rag        RAG API on 127.0.0.1:8000' \
 	  'make run-bank       Synthetic banking API on 127.0.0.1:8080' \
 	  'make run-agent      LangGraph Agent API on 127.0.0.1:8001' \
 	  'make run-ui         Streamlit on 127.0.0.1:8501' \
+	  'make run-mcp        Local stdio MCP server; launched by an MCP client' \
+	  'make mcp-demo       Discover/read/prompt/retrieve via Python; RAG must be running' \
+	  'make mcp-inspect    Discover tools with official Inspector (requires Node/npm)' \
+	  'make check-mcp      Offline MCP protocol and failure tests' \
 	  'make health         Check all four local HTTP services' \
 	  'make ingest         Ingest registered policies; calls OpenAI and writes Atlas' \
 	  'make datadog-up     Start the configured Docker Datadog Agent' \
@@ -67,7 +79,7 @@ check-env:
 	@test -f "$(ENV_FILE)" || { printf '%s\n' 'Missing $(ENV_FILE). Run make setup, then configure it using README.md.'; exit 1; }
 
 prereqs: check-env
-	@$(APP_RUN) python -c 'import sys, streamlit, ragas, langchain_mongodb, langgraph.checkpoint.mongodb; \
+	@$(APP_RUN) python -c 'import sys, streamlit, ragas, fastmcp, langchain_mongodb, langgraph.checkpoint.mongodb; \
 	  from app.core.config import Settings, AgentSettings, UISettings; \
 	  assert sys.version_info >= (3, 14); \
 	  Settings(_env_file=None); AgentSettings(_env_file=None); UISettings(_env_file=None)' >/dev/null 2>&1 || \
@@ -80,8 +92,13 @@ run: prereqs
 	  pids=''; \
 	  cleanup() { trap - INT TERM; if [ -n "$$pids" ]; then kill $$pids 2>/dev/null || :; fi; wait; }; \
 	  trap cleanup EXIT; trap 'exit 130' INT; trap 'exit 143' TERM; \
-	  printf '%s\n' 'Starting bank :8080, RAG :8000, Agent :8001 and UI :8501. Ctrl+C stops this stack.'; \
-	  $(BANK_COMMAND) & pids="$$pids $$!"; \
+	  printf '%s\n' 'Starting RAG :8000, Agent :8001 and UI :8501; local bank/MCP start only when enabled. Ctrl+C stops this stack.'; \
+	  if [ "$(WITH_LOCAL_BANK)" = "1" ]; then \
+	    $(BANK_COMMAND) & pids="$$pids $$!"; \
+	  fi; \
+	  if [ "$(WITH_BANKING_MCP)" = "1" ]; then \
+	    $(BANKING_MCP_COMMAND) & pids="$$pids $$!"; \
+	  fi; \
 	  $(RAG_COMMAND) & pids="$$pids $$!"; \
 	  $(AGENT_COMMAND) & pids="$$pids $$!"; \
 	  $(UI_COMMAND) & pids="$$pids $$!"; \
@@ -96,6 +113,26 @@ run: prereqs
 	    sleep 1; \
 	  done
 
+# Hosted banking is external; keep local bank/MCP processes out of this stack.
+run-hosted: WITH_LOCAL_BANK = 0
+run-hosted: WITH_BANKING_MCP = 0
+run-hosted: check-hosted-mcp run
+
+check-hosted-mcp: check-env
+	@$(APP_RUN) python -c 'from app.core.config import AgentSettings; s = AgentSettings(); assert s.banking_transport == "mcp" and s.banking_mcp_transport == "http" and s.banking_mcp_auth_mode == "oauth" and s.banking_mcp_url.scheme == "https" and s.banking_base_url.scheme == "https" and s.banking_mcp_signing_key and s.banking_mcp_oauth_storage_key' >/dev/null 2>&1 || \
+	  { printf '%s\n' 'Configure hosted HTTPS banking URLs, OAuth cache encryption and signing settings; see README.md.'; exit 1; }
+
+run-http: WITH_BANKING_MCP = 1
+run-http: APP_RUN = $(RUN) --env-file "$(ENV_FILE)" env BANKING_MCP_TRANSPORT=http
+run-http: check-http-mcp run
+
+check-http-mcp: check-env
+	@$(APP_RUN) python -c 'from app.core.config import AgentSettings; s = AgentSettings(); assert s.banking_mcp_token and s.banking_mcp_signing_key' >/dev/null 2>&1 || \
+	  { printf '%s\n' 'Configure private BANKING_MCP_TOKEN and BANKING_MCP_SIGNING_KEY in your environment file; see app/mcp/BANKING.md.'; exit 1; }
+
+run-banking-mcp: check-http-mcp
+	exec $(BANKING_MCP_COMMAND)
+
 run-all: run
 
 run-rag: prereqs
@@ -109,6 +146,23 @@ run-agent: prereqs
 
 run-ui: prereqs
 	exec $(UI_COMMAND)
+
+# Do not echo shell commands onto the stdio protocol channel.
+run-mcp: check-env
+	@exec $(APP_RUN) python -m app.mcp.server
+
+mcp-demo: check-env
+	$(APP_RUN) python -m app.mcp.client \
+	  --query 'What is the maximum loan amount for a NexaHome Loan?' \
+	  --as-of 2026-10-01 --product-id NEXA-HL --output "$(MCP_OUTPUT)"
+
+mcp-inspect: check-env
+	@command -v npx >/dev/null || { printf '%s\n' 'Install Node.js with npm to use MCP Inspector.'; exit 1; }
+	npx -y @modelcontextprotocol/inspector@2.13.0 --cli --method tools/list \
+	  -- $(APP_RUN) python -m app.mcp.server
+
+check-mcp:
+	$(RUN) pytest tests/test_mcp.py -q
 
 health:
 	@command -v curl >/dev/null || { printf '%s\n' 'Install curl to use make health.'; exit 1; }
@@ -138,3 +192,5 @@ reranker-up: check-env docker-ready
 
 reranker-down: check-env docker-ready
 	$(COMPOSE) -f app/compose.reranker.yaml down
+
+.PHONY: run-hosted check-hosted-mcp

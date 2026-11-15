@@ -10,7 +10,7 @@ import httpx
 import streamlit as st
 from pydantic import ValidationError
 
-from app.models.agent import AgentRequest
+from app.models.agent import AgentRequest, AgentResponse
 from app.models.agent_run import AgentRunResponse
 from app.models.validation import ServiceRequestDetails, ServiceRequestType
 
@@ -21,18 +21,27 @@ def clear_run() -> None:
     st.session_state.pop("agent_run_error", None)
 
 
+def clear_conversation() -> None:
+    """Clear customer text and loaded results when the operator or conversation changes."""
+    clear_run()
+    st.session_state.pop("agent_pending_query", None)
+    st.session_state.pop("agent_chat_turns", None)
+
+
 def request_run(
     client: httpx.Client, method: str, path: str, token: str, body: dict | None = None
 ) -> AgentRunResponse | None:
     """Call a durable-run endpoint and retain either a validated result or a safe UI error.
 
     Args:
-        body: Request payload used by this mock operation or test.
+        body: JSON payload for the selected Agent API operation.
 
     Returns:
         Validated run view, or None after retaining a safe request error.
     """
     clear_run()
+    if st.session_state.get("workspace") == "Agent chat":
+        path = "/v2" + path
     try:
         response = client.request(
             method, path, headers={"Authorization": "Bearer " + token}, json=body
@@ -91,15 +100,42 @@ def agent_workspace(client: httpx.Client, as_of: date, product_id: str | None) -
     Example:
         agent_workspace(client, policy_date, selected_product)
     """
-    st.title("Service requests", anchor=False)
+    st.title("Policy and service agent", anchor=False)
     st.caption("A different authorized reviewer must approve each proposal before submission.")
     token = st.text_input(
-        "Agent credential", type="password", key="agent_token", on_change=clear_run
+        "Agent credential", type="password", key="agent_token", on_change=clear_conversation
     )
     if not token:
-        clear_run()
+        clear_conversation()
         st.info("Enter your owner or reviewer credential. Customer access is checked by the API.")
         return
+
+    st.caption(
+        "Ask a policy question or describe a service request. Reply with missing details "
+        "when the agent asks for clarification. Policy scope comes from the sidebar."
+    )
+    st.button("New agent conversation", on_click=clear_conversation)
+    prompt = st.chat_input("Ask about policy or request a service…", max_chars=2000)
+    if prompt:
+        pending = st.session_state.get("agent_pending_query")
+        query = f"{pending}\nClarification: {prompt}" if pending else prompt
+        try:
+            request = AgentRequest(query=query, as_of=as_of, product_id=product_id)
+        except ValidationError:
+            st.error(
+                "Keep the request and its clarifications within 2,000 characters. "
+                "Start a new conversation to restate the complete request."
+            )
+        else:
+            result = request_run(
+                client, "POST", "/agent/runs", token, request.model_dump(mode="json")
+            )
+            if result is not None:
+                st.session_state["agent_run_id"] = str(result.run_id)
+                if result.response is not None and result.response.status == "needs_clarification":
+                    st.session_state["agent_pending_query"] = query
+                else:
+                    st.session_state.pop("agent_pending_query", None)
 
     with st.expander("Start a request"):
         with st.form("agent_start"):
@@ -128,6 +164,7 @@ def agent_workspace(client: httpx.Client, as_of: date, product_id: str | None) -
             except ValidationError:
                 st.error("Check the customer ID and request details.")
             else:
+                clear_conversation()
                 result = request_run(
                     client, "POST", "/agent/runs", token, request.model_dump(mode="json")
                 )
@@ -142,6 +179,7 @@ def agent_workspace(client: httpx.Client, as_of: date, product_id: str | None) -
             clear_run()
             st.error("Enter a valid saved run ID.")
         else:
+            clear_conversation()
             request_run(client, "GET", f"/agent/runs/{identifier}", token)
 
     if error := st.session_state.get("agent_run_error"):
@@ -154,6 +192,16 @@ def agent_workspace(client: httpx.Client, as_of: date, product_id: str | None) -
     st.caption(f"Approval expires: {result.expires_at.isoformat()}")
     if result.response is not None:
         st.write(result.response.message)
+        for suggestion in result.response.suggestions:
+            st.info(suggestion)
+        if result.response.answer is not None:
+            for citation in result.response.answer.citations:
+                with st.expander(f"[{citation.evidence_id}] {citation.matched_child.title}"):
+                    st.text(citation.quote)
+                    st.caption(
+                        f"{citation.matched_child.doc_id} · "
+                        f"v{citation.matched_child.policy_version}"
+                    )
         if result.response.validation is not None:
             with st.expander("Proposal and policy evidence", expanded=True):
                 st.json(result.response.validation.model_dump(mode="json"))
@@ -161,6 +209,11 @@ def agent_workspace(client: httpx.Client, as_of: date, product_id: str | None) -
             st.success("The bank received this request. Receipt acceptance is not completion.")
             st.json(result.response.submission.model_dump(mode="json"))
 
+    review_run(client, result, token)
+
+
+def review_run(client: httpx.Client, result: AgentRunResponse, token: str) -> None:
+    """Keep exact reviewer approval and uncertain-write recovery shared by both views."""
     if result.status == "pending_approval" and result.proposal_hash is not None:
         st.caption(f"Proposal fingerprint: {result.proposal_hash}")
         with st.form("agent_approval"):
@@ -184,3 +237,152 @@ def agent_workspace(client: httpx.Client, as_of: date, product_id: str | None) -
         if st.button("Retry the same approved operation"):
             request_run(client, "POST", f"/agent/runs/{result.run_id}/retry", token)
             st.rerun()
+
+
+def chat_response(response: AgentResponse) -> None:
+    """Render policy evidence, banking data and approval-required proposals in a chat turn."""
+    st.write(response.message)
+    for suggestion in response.suggestions:
+        st.info(suggestion)
+    if response.answer is not None:
+        for citation in response.answer.citations:
+            with st.expander(f"[{citation.evidence_id}] {citation.matched_child.title}"):
+                st.text(citation.quote)
+                st.caption(
+                    f"{citation.matched_child.doc_id} · v{citation.matched_child.policy_version}"
+                )
+    if response.transactions is not None:
+        st.dataframe(
+            [row.model_dump(mode="json") for row in response.transactions.items], hide_index=True
+        )
+        if response.transactions.next_cursor is not None:
+            st.caption("More transactions exist. This response stops at your requested limit.")
+    if response.validation is not None:
+        proposal = response.validation.case_proposal or response.validation.proposal
+        if proposal is not None:
+            with st.expander("Review proposed action", expanded=True):
+                st.json(proposal.model_dump(mode="json"))
+                st.caption(
+                    "A different authorized reviewer must approve this exact proposal before submission."
+                )
+            with st.expander("Policy evidence for this action"):
+                for item in response.validation.evidence:
+                    source = item.citation
+                    st.caption(
+                        f"{source.doc_id} · v{source.policy_version} · clause {source.clause or 'complete instrument'} · effective {source.effective_date}"
+                    )
+                    st.text(item.quote)
+    if response.case_submission is not None:
+        st.success(f"Case {response.case_submission.case.case_id} was created.")
+    if response.submission is not None:
+        st.success(
+            f"Service request {response.submission.service_request.service_request_id} was received; completion is pending."
+        )
+
+
+def chat_workspace(client: httpx.Client, as_of: date, product_id: str | None) -> None:
+    """Use one prompt for policy, owned transactions, cases and service requests."""
+    st.title("NexaAssist", anchor=False)
+    st.caption(
+        "Ask about loan policies, view your transactions, or prepare a case or service request."
+    )
+    with st.sidebar.expander("Banking access and approvals", expanded=False):
+        token = st.text_input(
+            "Agent credential", type="password", key="agent_token", on_change=clear_conversation
+        )
+        st.caption(
+            "Policy questions work without a credential. Banking reads and proposals require authorized customer access."
+        )
+        run_id = st.text_input("Saved run ID", key="agent_run_id")
+        load = st.button("Load saved run")
+    turns = st.session_state.setdefault("agent_chat_turns", [])
+    if load:
+        try:
+            identifier = UUID(run_id)
+        except ValueError:
+            st.error("Enter a valid saved run ID.")
+        else:
+            result = request_run(client, "GET", f"/agent/runs/{identifier}", token)
+            if result is not None:
+                turns.append({"prompt": None, "result": result})
+
+    if not turns:
+        st.markdown(
+            "Try **Maximum loan amount for NexaHome**, **Eligibility for auto loan**, "
+            "**Get at most five transactions from 1–14 November 2026**, or "
+            "**Prepare a LOW-priority LOAN_ENQUIRY case for NXC-0001 about home-loan documents**."
+        )
+    current = st.session_state.get("agent_run")
+    for turn in turns:
+        if turn["prompt"] is not None:
+            with st.chat_message("user"):
+                st.write(turn["prompt"])
+        value = turn.get("result")
+        if (
+            isinstance(value, AgentRunResponse)
+            and current is not None
+            and value.run_id == current.run_id
+        ):
+            value = turn["result"] = current
+        with st.chat_message("assistant"):
+            response = value.response if isinstance(value, AgentRunResponse) else value
+            if response is not None:
+                chat_response(response)
+            if turn.get("error"):
+                st.error(turn["error"])
+            if isinstance(value, AgentRunResponse) and value.status in (
+                "pending_approval",
+                "unconfirmed",
+            ):
+                st.caption(f"Status: {value.status} · Saved run: {value.run_id}")
+
+    if error := st.session_state.get("agent_run_error"):
+        st.error(error)
+    if current is not None:
+        review_run(client, current, token)
+    prompt = st.chat_input(
+        "Ask NexaAssist anything about your banking or policies…",
+        max_chars=2000,
+        key="agent_chat_input",
+    )
+    if prompt:
+        pending = st.session_state.get("agent_pending_query")
+        query = f"{pending}\nClarification: {prompt}" if pending else prompt
+        try:
+            request = AgentRequest(query=query, as_of=as_of, product_id=product_id)
+        except ValidationError:
+            st.error(
+                "Keep the request and clarifications within 2,000 characters. Start a new chat to restate it."
+            )
+            return
+        result_value: AgentRunResponse | AgentResponse | None = None
+        with st.spinner("Checking your request…"):
+            if token:
+                result_value = request_run(
+                    client, "POST", "/agent/runs", token, request.model_dump(mode="json")
+                )
+            else:
+                clear_run()
+                try:
+                    reply = client.post("/v2/agent", json=request.model_dump(mode="json"))
+                    reply.raise_for_status()
+                    result_value = AgentResponse.model_validate(reply.json())
+                except httpx.HTTPError, ValueError:
+                    st.session_state["agent_run_error"] = (
+                        "The agent could not complete this request. Check the Agent API and try again."
+                    )
+        turns.append(
+            {
+                "prompt": prompt,
+                "result": result_value,
+                "error": st.session_state.get("agent_run_error"),
+            }
+        )
+        response = (
+            result_value.response if isinstance(result_value, AgentRunResponse) else result_value
+        )
+        if response is not None and response.status == "needs_clarification":
+            st.session_state["agent_pending_query"] = query
+        elif response is not None:
+            st.session_state.pop("agent_pending_query", None)
+        st.rerun()

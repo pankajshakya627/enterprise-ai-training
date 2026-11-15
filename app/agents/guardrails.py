@@ -21,5 +21,6 @@ SENSITIVE = re.compile(
 def unsafe_input(request: AgentRequest) -> bool:
     """Conservative input screening; deterministic authorization still guards every action."""
     notes = request.action_details.notes if request.action_details is not None else None
-    text = request.query + "\n" + (notes or "")
+    summary = request.case_details.summary if request.case_details is not None else ""
+    text = request.query + "\n" + (notes or "") + "\n" + summary
     return bool(INJECTION.search(text) or SENSITIVE.search(text))

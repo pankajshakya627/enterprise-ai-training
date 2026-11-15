@@ -1,4 +1,4 @@
-"""Provide bounded RAG and authenticated banking HTTP clients to both agent routers."""
+"""Provide bounded RAG and scoped banking clients; banking uses MCP by default."""
 
 from __future__ import annotations
 
@@ -8,7 +8,10 @@ from typing import Annotated
 import httpx
 from fastapi import Depends
 
+from app.api.auth import get_validation_access
 from app.core.config import AgentSettings, get_agent_settings
+from app.models.validation import ValidationAccess
+from app.services.banking_mcp import BankingMCPTransport
 
 
 async def rag_client(
@@ -29,6 +32,7 @@ async def rag_client(
 
 async def banking_client(
     settings: Annotated[AgentSettings, Depends(get_agent_settings)],
+    access: Annotated[ValidationAccess | None, Depends(get_validation_access)] = None,
 ) -> AsyncIterator[httpx.AsyncClient | None]:
     """Yield an authenticated bounded banking client, or None when unconfigured.
 
@@ -40,6 +44,9 @@ async def banking_client(
         return
     async with httpx.AsyncClient(
         base_url=str(settings.banking_base_url).rstrip("/") + "/",
+        transport=BankingMCPTransport(settings, access)
+        if settings.banking_transport == "mcp"
+        else None,
         headers={"Authorization": "Bearer " + settings.banking_api_token.get_secret_value()},
         timeout=settings.agent_http_timeout_seconds,
         follow_redirects=False,

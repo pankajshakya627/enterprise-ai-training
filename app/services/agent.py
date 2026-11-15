@@ -30,8 +30,15 @@ from app.core.observability import prompt_annotation_context
 from app.models.agent import AgentRequest, AgentResponse, IntentDecision
 from app.models.answer import AnswerResponse
 from app.models.retrieval import RetrieveRequest, RetrieveResponse
-from app.models.validation import SubmittedServiceRequest, ValidationAccess, ValidationResult
+from app.models.validation import (
+    SubmittedCase,
+    SubmittedServiceRequest,
+    ValidationAccess,
+    ValidationResult,
+)
+from app.services.agent_mcp_retrieval import retrieve_over_mcp
 from app.services.agent_retrieval import retrieve_over_http
+from app.services.transactions import read_transactions
 from app.services.validation import validate_service_request
 
 logger = structlog.get_logger()
@@ -46,7 +53,9 @@ def build_workflow(
     banking_client: httpx.AsyncClient | None = None,
     agent_settings: AgentSettings | None = None,
     checkpointer: BaseCheckpointSaver | None = None,
-    actioner: Callable[[AgentRequest, ValidationResult, str], Awaitable[SubmittedServiceRequest]]
+    actioner: Callable[
+        [AgentRequest, ValidationResult, str], Awaitable[SubmittedServiceRequest | SubmittedCase]
+    ]
     | None = None,
 ) -> CompiledStateGraph:
     """Wire the model, retrieval adapter and optional banking capabilities into the graph.
@@ -101,6 +110,8 @@ def build_workflow(
 
     async def retrieve(value: RetrieveRequest) -> RetrieveResponse:
         """Retrieve scoped policy evidence through the configured retrieval integration."""
+        if agent_settings is not None and agent_settings.agent_retrieval_transport == "mcp":
+            return await retrieve_over_mcp(value, agent_settings)
         return await retrieve_over_http(value, client)
 
     async def answer(value: RetrieveRequest, evidence: RetrieveResponse) -> AnswerResponse:
@@ -136,6 +147,10 @@ def build_workflow(
         logger.info("agent_validation_completed", decision=result.decision)
         return result
 
+    async def customer_read(value: AgentRequest) -> AgentResponse:
+        assert banking_client is not None
+        return await read_transactions(value, banking_client, access)
+
     return build_agent_graph(
         RunnableLambda(classify),
         RunnableLambda(retrieve),
@@ -144,6 +159,7 @@ def build_workflow(
         access=access,
         checkpointer=checkpointer,
         actioner=actioner,
+        customer_reader=customer_read if banking_client is not None else None,
     )
 
 

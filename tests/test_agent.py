@@ -23,7 +23,7 @@ from app.main import create_app
 from app.models.agent import AgentRequest, IntentDecision
 from app.models.answer import AnswerDraft, AnswerResponse
 from app.models.retrieval import RetrieveRequest, RetrieveResponse
-from app.models.validation import ValidationAccess
+from app.models.validation import ValidationAccess, ValidationResult
 from app.services import agent as agent_service
 
 
@@ -333,14 +333,14 @@ def test_agent_reuses_real_phase1_http_route_and_answer_chain(
                 "/retrieve",
                 json={
                     **agent_request.model_dump(
-                        mode="json", exclude={"customer_id", "action", "action_details"}
+                        mode="json", include=set(RetrieveRequest.model_fields)
                     ),
                 },
             )
             assert direct.json() == evidence.model_dump(mode="json")
             retrieve.reset_mock()
             response = await agent_service.orchestrate(
-                agent_request, settings, AgentSettings(), client
+                agent_request, settings, AgentSettings(_env_file=None), client
             )
             return response
 
@@ -353,7 +353,7 @@ def test_agent_reuses_real_phase1_http_route_and_answer_chain(
     retrieve.assert_awaited_once()
     assert retrieve.await_args is not None
     assert retrieve.await_args.args[0].model_dump() == agent_request.model_dump(
-        exclude={"customer_id", "action", "action_details"}
+        include=set(RetrieveRequest.model_fields)
     )
     assert len(prompts) == (2 if invalid_quote else 1)
     for prompt in prompts:
@@ -603,6 +603,11 @@ def test_original_api_contracts_remain_separate() -> None:
         "/agent/runs/{run_id}",
         "/agent/runs/{run_id}/approval",
         "/agent/runs/{run_id}/retry",
+        "/v2/agent",
+        "/v2/agent/runs",
+        "/v2/agent/runs/{run_id}",
+        "/v2/agent/runs/{run_id}/approval",
+        "/v2/agent/runs/{run_id}/retry",
     }
 
 
@@ -627,3 +632,262 @@ def test_ten_routing_golden_cases_have_valid_contracts() -> None:
             IntentDecision.model_fields["intent"].annotation
         )
         assert case["context"]
+
+
+@pytest.mark.parametrize(
+    "kind,loan,product",
+    [
+        ("CALLBACK", None, None),
+        ("STATEMENT_COPY", None, None),
+        ("RE_KYC_REMINDER", None, None),
+        ("INTEREST_CERTIFICATE", "NXL-HL-0010", None),
+        ("OPT_IN_CIR_2026_07_PART_PREPAY", "NXL-HL-0010", "NEXA-HL"),
+    ],
+)
+@pytest.mark.parametrize("intent", ["supported_action", "customer_context"])
+def test_text_service_details_reach_existing_validator(
+    evidence: RetrieveResponse, kind: str, loan: str | None, product: str | None, intent: str
+) -> None:
+    choice = decision(
+        intent=intent,
+        product_id=product,
+        as_of="2026-10-01",
+        customer_id="NXC-0010",
+        action="createServiceRequest",
+        request_type=kind,
+        loan_account_id=loan,
+    )
+    retrieve = AsyncMock(return_value=evidence)
+    validate = AsyncMock(return_value=ValidationResult(decision="blocked", reason="Test decision"))
+    answer = AsyncMock()
+    graph = build_agent_graph(
+        RunnableLambda(lambda _: choice),
+        RunnableLambda(retrieve),
+        answer,
+        validator=validate,
+        access=ValidationAccess(customer_ids={"NXC-0010"}),
+    )
+    request = AgentRequest(query=f"Prepare {kind} for NXC-0010 as of 2026-10-01; loan {loan}.")
+    state = asyncio.run(graph.ainvoke({"request": request}))
+    assert state["response"].status == "blocked"
+    resolved = state["request"]
+    assert resolved.action_details.request_type == kind
+    assert resolved.action_details.loan_account_id == loan
+    assert resolved.action_details.notes is None
+    assert resolved.customer_id == "NXC-0010"
+    validate.assert_awaited_once_with(resolved, evidence)
+    retrieve.assert_awaited_once()
+    assert "NXC-0010" not in retrieve.call_args.args[0].query
+    answer.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "explicit,extracted,expected_loan,missing",
+    [
+        ({"request_type": "CALLBACK"}, {}, None, []),
+        (
+            {"request_type": "CALLBACK", "notes": "Call in the afternoon"},
+            {"request_type": "CALLBACK", "loan_account_id": "NXL-HL-0010"},
+            "NXL-HL-0010",
+            [],
+        ),
+        (
+            {"request_type": "CALLBACK"},
+            {"request_type": "STATEMENT_COPY"},
+            None,
+            ["action_details"],
+        ),
+        (
+            {"request_type": "CALLBACK", "loan_account_id": "NXL-HL-0010"},
+            {"loan_account_id": "NXL-HL-0023"},
+            "NXL-HL-0010",
+            ["action_details"],
+        ),
+    ],
+)
+def test_service_text_merges_without_overwriting_explicit_details(
+    explicit: dict, extracted: dict, expected_loan: str | None, missing: list
+) -> None:
+    retrieve, answer = AsyncMock(), AsyncMock()
+    graph = build_agent_graph(
+        RunnableLambda(lambda _: decision(intent="supported_action", **extracted)),
+        RunnableLambda(retrieve),
+        answer,
+    )
+    request = AgentRequest(
+        query="Prepare the requested service.",
+        customer_id="NXC-0010",
+        action="createServiceRequest",
+        action_details=explicit,
+    )
+    state = asyncio.run(graph.ainvoke({"request": request}))
+    details = state["request"].action_details
+    assert details.request_type == explicit["request_type"]
+    assert details.loan_account_id == expected_loan
+    assert details.notes == explicit.get("notes")
+    assert state["response"].missing_fields == missing
+    assert state["response"].suggestions if missing else not state["response"].suggestions
+    retrieve.assert_not_awaited()
+    answer.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "fields,extracted,missing,guide",
+    [
+        ({}, {}, ["customer_id", "action"], "synthetic customer ID"),
+        (
+            {"customer_id": "NXC-0010", "action": "createServiceRequest"},
+            {},
+            ["as_of", "action_details"],
+            "statement copy",
+        ),
+        (
+            {"customer_id": "NXC-0010", "action": "createServiceRequest", "as_of": "2026-10-01"},
+            {"request_type": "INTEREST_CERTIFICATE"},
+            ["action_details"],
+            "loan account ID",
+        ),
+        (
+            {"customer_id": "NXC-0010", "action": "createServiceRequest", "as_of": "2026-10-01"},
+            {"request_type": "OPT_IN_CIR_2026_07_PART_PREPAY", "loan_account_id": "NXL-HL-0010"},
+            ["product_id"],
+            "NEXA-HL",
+        ),
+    ],
+)
+def test_service_clarification_suggests_options_without_downstream_calls(
+    fields: dict, extracted: dict, missing: list, guide: str
+) -> None:
+    retrieve, answer, validate = AsyncMock(), AsyncMock(), AsyncMock()
+    graph = build_agent_graph(
+        RunnableLambda(lambda _: decision(intent="supported_action", **extracted)),
+        RunnableLambda(retrieve),
+        answer,
+        validator=validate,
+        access=ValidationAccess(customer_ids={"NXC-0010"}),
+    )
+    state = asyncio.run(
+        graph.ainvoke({"request": AgentRequest(query="Prepare a request", **fields)})
+    )
+    response = state["response"]
+    assert response.status == "needs_clarification"
+    assert response.missing_fields == missing
+    assert guide in " ".join(response.suggestions)
+    assert len(response.suggestions) == len(missing)
+    retrieve.assert_not_awaited()
+    validate.assert_not_awaited()
+    answer.assert_not_awaited()
+
+
+def test_vague_request_suggests_supported_services() -> None:
+    graph = build_agent_graph(
+        RunnableLambda(lambda _: decision(intent="missing_information")),
+        RunnableLambda(AsyncMock()),
+        AsyncMock(),
+    )
+    response = asyncio.run(graph.ainvoke({"request": AgentRequest(query="Help me")}))["response"]
+    assert response.missing_fields == ["question"]
+    assert "one supported service at a time" in response.suggestions[0]
+
+
+CHAT_CASES = [
+    json.loads(line)
+    for line in Path("evaluation/datasets/agent_chat.jsonl").read_text().splitlines()
+]
+
+
+@pytest.mark.parametrize("case", CHAT_CASES, ids=[case["id"] for case in CHAT_CASES])
+def test_unified_chat_golden_routing_cases(case: dict, evidence: RetrieveResponse) -> None:
+    from app.models.agent import AgentResponse
+    from app.models.validation import ServiceRequestProposal, ValidationEvidence
+
+    choice = IntentDecision.model_validate(case["context"]["decision"])
+    retrieve = AsyncMock(return_value=evidence)
+    answer = AsyncMock(
+        return_value=AnswerResponse(
+            as_of=evidence.as_of,
+            status="answered",
+            answer="Fixture policy response",
+            citations=[],
+            retrieval_timings=evidence.timings,
+            generation_ms=0,
+        )
+    )
+
+    async def validate(request, sources):
+        return ValidationResult(
+            decision="allowed",
+            reason="Fixture validation",
+            evidence=[
+                ValidationEvidence(
+                    citation=evidence.results[0].citation, quote=evidence.results[0].text
+                )
+            ],
+            case_proposal=request.case_details,
+            proposal=None
+            if request.case_details is not None
+            else ServiceRequestProposal(
+                customer_id=request.customer_id, **request.action_details.model_dump()
+            ),
+        )
+
+    customer_read = AsyncMock(
+        return_value=AgentResponse(
+            intent="customer_context", status="answered", message="Fixture transactions"
+        )
+    )
+    graph = build_agent_graph(
+        RunnableLambda(lambda _: choice),
+        RunnableLambda(retrieve),
+        answer,
+        validator=validate,
+        customer_reader=customer_read,
+        access=ValidationAccess(customer_ids={"NXC-0001"}),
+    )
+    state = asyncio.run(graph.ainvoke({"request": AgentRequest.model_validate(case["input"])}))
+    response = state["response"]
+    assert response.status == case["expected_output"]["status"]
+    assert response.missing_fields == case["expected_output"]["missing_fields"]
+    if response.status in ("needs_clarification", "forbidden"):
+        retrieve.assert_not_awaited()
+        answer.assert_not_awaited()
+        customer_read.assert_not_awaited()
+    if response.status == "needs_clarification":
+        assert response.suggestions
+    if case["id"] == "transactions-read":
+        customer_read.assert_awaited_once()
+        retrieve.assert_not_awaited()
+
+
+@pytest.mark.parametrize("mixed", [False, True])
+def test_case_date_and_mixed_requests_clarify_before_any_tool(mixed: bool) -> None:
+    from app.models.validation import CaseBody
+
+    case = CaseBody(
+        customer_id="NXC-0001",
+        category="LOAN_ENQUIRY",
+        priority="LOW",
+        summary="Home-loan documents enquiry",
+    )
+    choice = decision(
+        intent="supported_action", customer_id="NXC-0001", action="createCase", case_details=case
+    )
+    request = AgentRequest(
+        query="Prepare the case",
+        as_of="2026-11-15" if mixed else None,
+        action_details={"request_type": "CALLBACK"} if mixed else None,
+    )
+    retrieve, answer, validate = AsyncMock(), AsyncMock(), AsyncMock()
+    graph = build_agent_graph(
+        RunnableLambda(lambda _: choice),
+        RunnableLambda(retrieve),
+        answer,
+        validator=validate,
+        access=ValidationAccess(customer_ids={"NXC-0001"}),
+    )
+    response = asyncio.run(graph.ainvoke({"request": request}))["response"]
+    assert response.status == "needs_clarification"
+    assert ("question" if mixed else "as_of") in response.missing_fields
+    retrieve.assert_not_awaited()
+    answer.assert_not_awaited()
+    validate.assert_not_awaited()
