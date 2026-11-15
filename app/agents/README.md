@@ -6,6 +6,56 @@ for current startup/dependency ownership, the full request trace and verified co
 For step-by-step UI approval/rejection instructions, all 27 customers and all five
 request types, see the [Service requests operator guide](../../C4-Documentation/SERVICE_REQUESTS_GUIDE.md).
 
+## Unified chat harness
+
+**Agent chat** is the default workspace: one message input with a retained local
+conversation. Ask a policy question, request owned-account transactions, or
+prepare a case or service request. Banking credentials and saved-run loading
+live in the sidebar. Policy questions work without a banking credential. The
+legacy **Policy chat** and **Service requests** workspaces remain available.
+
+| Request | Route and result |
+| --- | --- |
+| “Maximum loan amount for nexa home loan” | Orchestrator → policy MCP → grounded answer and citations |
+| “eligibiliby for the Autoloan” | Resolve the stated auto-loan product → policy MCP → eligibility explanation |
+| “Get at most five transactions from an owned account for 1–14 November 2026” | Ask for customer ID → check authorized accounts → select the only account or ask which owned account → banking MCP transaction page |
+| “Prepare a LOW-priority LOAN_ENQUIRY case for NXC-0001 about home-loan documents. Obtain approval before submitting.” | Extract case details → verify policy and authorized customer → exact proposal with policy evidence → distinct reviewer approval → fresh validation → banking MCP case submission |
+
+The existing LangGraph workflow is the bounded harness: the model interprets
+intent and explicit values; application code controls permitted tools, identity,
+validation, approval, work limits and recovery. A tool catalog does not grant
+permission to call every operation. General customer profile/KYC chat and case
+note/escalation chat remain unavailable; prohibited credit decisions remain
+forbidden. All five existing service-request categories retain their workflows.
+
+Transaction dates and policy lookup dates are separate. The requested limit is
+preserved, ownership is checked before a transaction call, and returned rows
+must match the selected account, date interval and maximum count. Multiple
+owned accounts trigger a clarification with authorized choices. No subsequent
+page is fetched automatically. Transaction records do not enter an LLM prompt.
+
+Case category, priority, customer and summary must be supplied explicitly; a
+missing priority is never guessed. The reviewer inspects both the exact proposal
+and retained policy evidence. A different authorized identity approves its hash;
+a statement such as “obtain approval” does not approve it. Revalidation, leases,
+expiry and retries reuse the existing saved-run path and stable idempotency key.
+Legacy saved service-request hashes keep their original serialization.
+
+Missing or conflicting inputs return `needs_clarification`, `missing_fields`
+and `suggestions`. A follow-up refines only the pending request. **New chat**
+or a credential change clears pending customer text. The combined request is
+limited to 2,000 characters; UI history stays in the browser session. Named
+banking workflows use durable MongoDB runs. Standalone policy requests use
+`POST /agent`; authenticated chat uses `/agent/runs` and the existing approval,
+load and retry endpoints. No credential or MCP address is accepted from a message.
+
+`AGENT_RETRIEVAL_TRANSPORT=mcp` uses the existing local `retrieve_policy` tool;
+`BANKING_TRANSPORT=mcp` uses the existing banking adapter and hosted OAuth
+configuration. No new integration dependency or permission expansion is needed.
+The ten `evaluation/datasets/agent_chat.jsonl` cases exercise deterministic
+routing contracts; they are not live model-quality scores. `make check-full`
+checks the complete test suite, type/lint/floor gates, coverage and security.
+
 ## Integrated flow — 27 October 2026
 
 All five service-request types below use the same four roles:
@@ -74,7 +124,7 @@ must not be interpreted as proof that a bank operation never occurred.
 
 The scoped API-key identities are an explicit trust boundary, not a claim of
 OIDC/SSO integration. Production gateway identity, rate limits, tenant operations,
-case tools, MCP and AWS rollout remain
+general customer/case-note chat and AWS rollout remain
 separate work. The [gap analysis](../../.planning/phase2-four-agent-integration.md)
 distinguishes these from the implemented Phase 2 path.
 
@@ -354,3 +404,11 @@ effects. Automatic retries, MCP, a new Agent UI and deployment are not added.
   remain stateless. Older decks predate the run/approval integration.
 - The syllabus's four roles are Orchestrator, Retriever, Validator and Action.
   Customer reads are a tool used by the Validator here, not a fifth agent.
+
+### API compatibility
+
+The current UI uses `/v2/agent` and `/v2/agent/runs` (including saved-run read,
+approval and retry). These expose suggestions, transactions and case receipts.
+The unversioned endpoints retain their earlier response field shape for strict
+clients. Use the v2 endpoints for new chat capabilities. Both versions share
+the same run store, ownership checks and approval workflow.

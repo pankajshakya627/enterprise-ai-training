@@ -19,7 +19,7 @@ type ServiceRequestType = Literal[
 
 
 class ServiceRequestDetails(BaseModel):
-    """Validated service request details contract.
+    """Service-request type, selected loan and optional notes.
 
     Attributes:
         request_type: Supported service-request category selected for the operation.
@@ -35,7 +35,7 @@ class ServiceRequestDetails(BaseModel):
 
 
 class ServiceRequestProposal(ServiceRequestDetails):
-    """Service Request Proposal used by validation.
+    """Service-request details tied to an authorized customer.
 
     Attributes:
         customer_id: Synthetic customer identifier within the authorized scope.
@@ -93,7 +93,7 @@ class AgentPrincipal(BaseModel):
 
 
 class CustomerAccounts(BaseModel):
-    """Validated customer accounts contract.
+    """Customer identity, deposit accounts and loans returned by the bank.
 
     Attributes:
         customer_id: Synthetic customer identifier within the authorized scope.
@@ -109,7 +109,7 @@ class CustomerAccounts(BaseModel):
 
 
 class LoanReference(BaseModel):
-    """Validated loan reference contract.
+    """Loan account and product identifiers used for ownership checks.
 
     Attributes:
         loan_account_id: Existing loan account selected for ownership and eligibility checks.
@@ -139,7 +139,7 @@ class LoanEligibilityFacts(LoanReference):
 
 
 class ValidationEvidence(BaseModel):
-    """Validated validation evidence contract.
+    """Policy citation and exact source text supporting validation.
 
     Attributes:
         citation: Document version, clause and effective date identifying this evidence.
@@ -152,8 +152,26 @@ class ValidationEvidence(BaseModel):
     quote: str = Field(min_length=1)
 
 
+class CaseBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    customer_id: str = Field(pattern=r"^NXC-[0-9]{4}$")
+    category: Literal[
+        "LOAN_ENQUIRY",
+        "KYC_ISSUE",
+        "FEE_WAIVER_REQUEST",
+        "COMPLAINT",
+        "SUSPECTED_FRAUD",
+        "DOCUMENT_ANOMALY",
+        "OTHER",
+    ]
+    priority: Literal["LOW", "NORMAL", "HIGH"]
+    summary: str = Field(min_length=5, max_length=1000)
+    related_application_id: str | None = None
+    channel: Literal["ASSISTANT"] = "ASSISTANT"
+
+
 class ValidationResult(BaseModel):
-    """Validated validation result contract.
+    """Eligibility decision, supporting policy evidence and any allowed proposal.
 
     Attributes:
         decision: Reviewer decision bound to the exact retained proposal hash.
@@ -169,6 +187,7 @@ class ValidationResult(BaseModel):
     reason: str
     evidence: list[ValidationEvidence] = Field(default_factory=list)
     proposal: ServiceRequestProposal | None = None
+    case_proposal: CaseBody | None = None
     requires_approval: Literal[True] = True
 
     @model_validator(mode="after")
@@ -178,7 +197,8 @@ class ValidationResult(BaseModel):
         Raises:
             ValueError: An allowed proposal requires policy evidence.
         """
-        if (self.decision == "allowed") != (self.proposal is not None):
+        proposals = int(self.proposal is not None) + int(self.case_proposal is not None)
+        if proposals > 1 or (self.decision == "allowed") != (proposals == 1):
             raise ValueError("Only an allowed decision can carry a proposal")
         if self.decision == "allowed" and not self.evidence:
             raise ValueError("An allowed proposal requires policy evidence")
@@ -186,13 +206,13 @@ class ValidationResult(BaseModel):
 
 
 class ServiceRequestReceipt(BaseModel):
-    """Validated service request receipt contract.
+    """Bank receipt for a received service request.
 
     Attributes:
         customer_id: Synthetic customer identifier within the authorized scope.
         request_type: Supported service-request category selected for the operation.
         loan_account_id: Existing loan account selected for ownership and eligibility checks.
-        status: HTTP or workflow status used by the scenario.
+        status: Receipt or submission state.
         created_at: Timezone-aware creation timestamp of the saved run or receipt.
     """
 
@@ -218,10 +238,10 @@ class ServiceRequestReceipt(BaseModel):
 
 
 class SubmittedServiceRequest(BaseModel):
-    """Validated submitted service request contract.
+    """Verified bank receipt with the policy evidence used for submission.
 
     Attributes:
-        status: HTTP or workflow status used by the scenario.
+        status: Receipt or submission state.
         evidence: Retained retrieval results and complete applicable amendments.
     """
 
@@ -229,4 +249,31 @@ class SubmittedServiceRequest(BaseModel):
 
     status: Literal["submitted"] = "submitted"
     service_request: ServiceRequestReceipt
+    evidence: list[ValidationEvidence]
+
+
+class CaseReceipt(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    case_id: str = Field(pattern=r"^NXCASE-[0-9]{6}$")
+    customer_id: str = Field(pattern=r"^NXC-[0-9]{4}$")
+    category: str
+    priority: str
+    summary: str
+    related_application_id: str | None
+    status: Literal["OPEN"]
+    created_at: datetime
+    notes: list[dict[str, Any]]
+    escalation: dict[str, Any] | None
+
+    @model_validator(mode="after")
+    def aware_timestamp(self) -> CaseReceipt:
+        if self.created_at.utcoffset() is None:
+            raise ValueError("Case receipt requires a timezone-aware timestamp")
+        return self
+
+
+class SubmittedCase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: Literal["submitted"] = "submitted"
+    case: CaseReceipt
     evidence: list[ValidationEvidence]

@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import Mock
 from uuid import uuid4
 
@@ -86,8 +87,9 @@ def published_evidence() -> dict[str, RetrieveResponse]:
     return result
 
 
-@pytest.fixture
+@pytest.fixture(params=["http", "mcp", "mcp-http"])
 def world(
+    request: pytest.FixtureRequest,
     run_store: MongoRunStore,
     workflow_settings: Settings,
     published_evidence: dict[str, RetrieveResponse],
@@ -113,10 +115,15 @@ def world(
         post_entered=None,
         post_release=None,
         draft=None,
+        classification=None,
     )
     config = AgentSettings(
         _env_file=None,
         banking_api_token="synthetic-bank",
+        banking_transport="http" if request.param == "http" else "mcp",
+        banking_mcp_transport="http" if request.param == "mcp-http" else "stdio",
+        banking_mcp_token="h" * 48,
+        banking_mcp_signing_key="s" * 48,
         agent_principals=[
             {"principal_id": "owner", "token": "o" * 32, "customer_ids": ["NXC-0010"]},
             {
@@ -142,7 +149,7 @@ def world(
         def respond(value):
             if schema is IntentDecision:
                 classify()
-                return IntentDecision(
+                return context.classification or IntentDecision(
                     intent=context.intent,
                     product_id=None,
                     as_of=None,
@@ -200,6 +207,77 @@ def world(
                 event_hooks={"request": [capture]},
             ) as bank,
         ):
+            lifecycle_task = None
+            lifecycle_stop = asyncio.Event()
+            if request.param in {"mcp", "mcp-http"}:
+                from app.mcp.banking_server import build_banking_server
+                from app.models.validation import ValidationAccess
+                from app.services import banking_mcp
+
+                def local_server(**kwargs):
+                    env = kwargs["env"]
+                    upstream.headers["Authorization"] = "Bearer " + env["BANKING_API_TOKEN"]
+                    fault = context.bank_client.headers.get("X-Mock-Fault")
+                    if fault is not None:
+                        upstream.headers["X-Mock-Fault"] = fault
+                    else:
+                        upstream.headers.pop("X-Mock-Fault", None)
+                    return build_banking_server(
+                        upstream,
+                        ValidationAccess(customer_ids=json.loads(env["BANKING_MCP_CUSTOMER_IDS"])),
+                        env["BANKING_MCP_WRITE_GRANT"] or None,
+                    )
+
+                monkeypatch.setattr(banking_mcp, "StdioTransport", local_server)
+                # This test scope is the owner/reviewer overlap; API auth is still exercised.
+                wrapped = httpx.AsyncClient(
+                    transport=banking_mcp.BankingMCPTransport(
+                        config,
+                        ValidationAccess(customer_ids=config.agent_principals[0].customer_ids),
+                    ),
+                    base_url=bank.base_url,
+                    headers=bank.headers,
+                )
+                upstream = bank
+                bank = wrapped
+                if request.param == "mcp-http":
+                    import httpx2
+                    from starlette.middleware import Middleware
+
+                    from app.mcp.banking_http import BankingHTTPAuth, request_session
+
+                    mcp_server = build_banking_server(
+                        upstream,
+                        ValidationAccess(customer_ids=frozenset()),
+                        session_provider=request_session,
+                    )
+                    mcp_app = mcp_server.http_app(
+                        path="/mcp",
+                        stateless_http=True,
+                        json_response=True,
+                        middleware=[Middleware(BankingHTTPAuth, settings=config)],
+                    )
+                    lifecycle_ready = asyncio.Event()
+
+                    async def run_mcp_lifespan():
+                        async with mcp_app.router.lifespan_context(mcp_app):
+                            lifecycle_ready.set()
+                            await lifecycle_stop.wait()
+
+                    lifecycle_task = asyncio.create_task(run_mcp_lifespan())
+                    await lifecycle_ready.wait()
+
+                    def http_factory(**kwargs):
+                        fault = context.bank_client.headers.get("X-Mock-Fault")
+                        if fault is not None:
+                            upstream.headers["X-Mock-Fault"] = fault
+                        else:
+                            upstream.headers.pop("X-Mock-Fault", None)
+                        return httpx2.AsyncClient(
+                            transport=httpx2.ASGITransport(app=mcp_app), **kwargs
+                        )
+
+                    monkeypatch.setattr(banking_mcp, "mcp_http_client", http_factory)
             app = create_agent_app()
             app.dependency_overrides[get_settings] = lambda: workflow_settings
             app.dependency_overrides[get_agent_settings] = lambda: config
@@ -211,7 +289,14 @@ def world(
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url="http://agent/"
             ) as caller:
-                yield caller
+                try:
+                    yield caller
+                finally:
+                    if request.param in {"mcp", "mcp-http"}:
+                        await bank.aclose()
+                    if lifecycle_task is not None:
+                        lifecycle_stop.set()
+                        await lifecycle_task
 
     context.clients = clients
     yield context
@@ -404,6 +489,7 @@ def test_early_stops_and_invalid_evidence_never_write(world, failure: str) -> No
         "changed_policy",
         "changed_facts",
         "bank_identity",
+        "bank_transport",
     ],
 )
 def test_approval_is_owner_scoped_exact_current_and_non_bypassable(world, failure: str) -> None:
@@ -446,6 +532,10 @@ def test_approval_is_owner_scoped_exact_current_and_non_bypassable(world, failur
                 ].parent_text += "\nA changed policy annotation."
             if failure == "changed_facts":
                 world.bank.OPTED_IN.add("NXC-0010")
+            if failure == "bank_transport":
+                world.config.banking_transport = (
+                    "http" if world.config.banking_transport == "mcp" else "mcp"
+                )
             if failure == "bank_identity":
                 world.bank_client.headers["Authorization"] = "Bearer changed-bank-caller"
             result = await caller.post(
@@ -459,7 +549,7 @@ def test_approval_is_owner_scoped_exact_current_and_non_bypassable(world, failur
                 else 404
                 if failure == "foreign_reviewer"
                 else 409
-                if failure in ("stale", "expired", "bank_identity")
+                if failure in ("stale", "expired", "bank_identity", "bank_transport")
                 else 403
             )
             assert result.status_code == expected, result.text
@@ -810,11 +900,13 @@ def test_streamlit_owner_reviewer_flow_through_actual_graph_and_bank(
     from fastapi.testclient import TestClient
     from streamlit.testing.v1 import AppTest
 
+    from app.core import lifespan
     from app.ui import app as ui
 
     with asyncio.Runner() as runner:
         context = world.clients()
         runner.run(context.__aenter__())
+        monkeypatch.setattr(lifespan, "get_settings", world.app.dependency_overrides[get_settings])
         try:
             with TestClient(world.app) as agent_api_client:
 
@@ -867,3 +959,290 @@ def test_streamlit_owner_reviewer_flow_through_actual_graph_and_bank(
                     assert len(world.retrievals) == (2 if decision == "approve" else 1)
         finally:
             runner.run(context.__aexit__(None, None, None))
+
+
+@pytest.mark.parametrize("kind", TYPES)
+def test_text_request_clarification_uses_both_mcp_paths_before_approved_action(
+    world, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    from app.mcp.server import build_mcp_server
+    from app.services import agent_mcp_retrieval
+
+    world.config.agent_retrieval_transport = "mcp"
+    needs_loan = kind in ("INTEREST_CERTIFICATE", "OPT_IN_CIR_2026_07_PART_PREPAY")
+    choice = IntentDecision(
+        intent="supported_action",
+        product_id="NEXA-HL" if kind == "OPT_IN_CIR_2026_07_PART_PREPAY" else None,
+        as_of=None,
+        customer_id=None,
+        action="createServiceRequest",
+        request_type=kind,
+        loan_account_id=None,
+        product_required=False,
+        missing_fields=[],
+    )
+    world.classification = choice
+
+    async def run() -> None:
+        async with world.clients() as caller:
+            rag = world.app.dependency_overrides[agent_api.rag_client]()
+            policy_server = build_mcp_server(rag)
+            monkeypatch.setattr(agent_mcp_retrieval, "StdioTransport", lambda **_: policy_server)
+            query = f"Please prepare a {kind} service request."
+            initial = await caller.post(
+                "/v2/agent/runs", headers=OWNER, json={"query": query, "as_of": "2026-10-01"}
+            )
+            assert initial.status_code == 201, initial.text
+            clarification = initial.json()["response"]
+            assert clarification["status"] == "needs_clarification"
+            assert "customer_id" in clarification["missing_fields"]
+            assert clarification["suggestions"]
+            assert not world.retrievals and not world.calls
+            assert world.bank.COUNTERS["sr"] == 0
+            loan = "NXL-HL-0010" if needs_loan else None
+            world.classification = choice.model_copy(
+                update={"customer_id": "NXC-0010", "loan_account_id": loan}
+            )
+            prepared = await caller.post(
+                "/v2/agent/runs",
+                headers=OWNER,
+                json={
+                    "query": query + f"\nClarification: Customer NXC-0010, loan {loan}.",
+                    "as_of": "2026-10-01",
+                },
+            )
+            assert prepared.status_code == 201, prepared.text
+            pending = prepared.json()
+            assert pending["status"] == "pending_approval"
+            proposal = pending["response"]["validation"]["proposal"]
+            assert proposal["request_type"] == kind
+            assert proposal["customer_id"] == "NXC-0010"
+            assert proposal["loan_account_id"] == loan
+            assert len(world.retrievals) == 1
+            assert world.bank.COUNTERS["sr"] == 0
+            submitted = await caller.post(
+                f"/v2/agent/runs/{pending['run_id']}/approval",
+                headers=REVIEWER,
+                json={"decision": "approve", "proposal_hash": pending["proposal_hash"]},
+            )
+            assert submitted.status_code == 200, submitted.text
+            assert submitted.json()["status"] == "submitted"
+            assert world.bank.COUNTERS["sr"] == 1
+            assert len(world.retrievals) == 2
+            assert world.classify.call_count == 2
+            assert [request.method for request in world.calls] == ["GET", "GET", "POST"]
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("decision", ["approve", "reject", "self", "stale", "timeout"])
+def test_unified_chat_case_uses_exact_approval_and_idempotent_recovery(
+    world, decision: str
+) -> None:
+    from app.models.validation import CaseBody
+
+    for index, principal in enumerate(world.config.agent_principals[:2]):
+        world.config.agent_principals[index] = principal.model_copy(
+            update={"customer_ids": principal.customer_ids | {"NXC-0001"}}
+        )
+    details = CaseBody(
+        customer_id="NXC-0001",
+        category="LOAN_ENQUIRY",
+        priority="LOW",
+        summary="Home-loan documents enquiry",
+    )
+    world.classification = IntentDecision(
+        intent="supported_action",
+        product_id=None,
+        as_of=None,
+        customer_id="NXC-0001",
+        action="createCase",
+        case_details=details,
+        product_required=False,
+        missing_fields=[],
+    )
+
+    async def run() -> None:
+        async with world.clients() as caller:
+            first = await caller.post(
+                "/v2/agent/runs",
+                headers=OWNER,
+                json={
+                    "query": "Prepare a LOW-priority LOAN_ENQUIRY case for NXC-0001 about home-loan documents. Obtain approval before submitting.",
+                    "as_of": "2026-10-01",
+                },
+            )
+            assert first.status_code == 201, first.text
+            pending = first.json()
+            assert pending["status"] == "pending_approval"
+            assert pending["response"]["validation"]["case_proposal"] == details.model_dump(
+                mode="json"
+            )
+            assert pending["response"]["validation"]["proposal"] is None
+            legacy = await caller.get(f"/agent/runs/{pending['run_id']}", headers=OWNER)
+            assert legacy.status_code == 200
+            assert legacy.json()["status"] == "blocked"
+            assert legacy.json()["proposal_hash"] is None
+            assert legacy.json()["response"]["validation"] is None
+            assert "v2" in legacy.json()["response"]["message"]
+            assert world.bank.COUNTERS["case"] == 0
+            assert len(world.retrievals) == 1
+            headers = OWNER if decision == "self" else REVIEWER
+            fingerprint = "0" * 64 if decision == "stale" else pending["proposal_hash"]
+            if decision == "timeout":
+                world.bank_client.headers["X-Mock-Fault"] = "commit-then-timeout"
+            result = await caller.post(
+                f"/v2/agent/runs/{pending['run_id']}/approval",
+                headers=headers,
+                json={
+                    "decision": "reject" if decision == "reject" else "approve",
+                    "proposal_hash": fingerprint,
+                },
+            )
+            if decision in ("self", "stale"):
+                assert result.status_code == (403 if decision == "self" else 409)
+                assert world.bank.COUNTERS["case"] == 0
+            elif decision == "reject":
+                assert result.json()["status"] == "rejected"
+                assert world.bank.COUNTERS["case"] == 0
+            else:
+                if decision == "timeout":
+                    assert result.status_code == 503
+                    assert world.bank.COUNTERS["case"] == 1
+                    result = await caller.post(
+                        f"/v2/agent/runs/{pending['run_id']}/retry", headers=OWNER
+                    )
+                assert result.status_code == 200, result.text
+                assert result.json()["status"] == "submitted"
+                receipt = result.json()["response"]["case_submission"]["case"]
+                assert receipt["customer_id"] == "NXC-0001"
+                assert receipt["category"] == "LOAN_ENQUIRY" and receipt["priority"] == "LOW"
+                assert world.bank.COUNTERS["case"] == 1
+                repeated = await caller.post(
+                    f"/v2/agent/runs/{pending['run_id']}/retry", headers=OWNER
+                )
+                assert repeated.json() == result.json()
+                assert world.bank.COUNTERS["case"] == 1
+                assert len(world.retrievals) == 2
+            world.classify.assert_called_once()
+
+    asyncio.run(run())
+
+
+def test_transaction_query_routes_to_banking_without_policy_retrieval_or_writes(world) -> None:
+    from app.models.banking_mcp import TransactionDetails
+
+    world.classification = IntentDecision(
+        intent="customer_context",
+        product_id=None,
+        as_of=None,
+        customer_id="NXC-0010",
+        action=None,
+        product_required=False,
+        missing_fields=[],
+        transactions=TransactionDetails(
+            account_id=next(
+                a["account_id"]
+                for a in world.bank.CUSTOMERS["NXC-0010"]["accounts"]
+                if a["type"] != "loan"
+            ),
+            from_date="2026-11-01",
+            to_date="2026-11-14",
+            limit=5,
+        ),
+    )
+
+    async def run() -> None:
+        async with world.clients() as caller:
+            result = await caller.post(
+                "/v2/agent",
+                headers=OWNER,
+                json={
+                    "query": "Get at most five transactions from an owned account for 1–14 November 2026 for NXC-0010"
+                },
+            )
+            assert result.status_code == 200, result.text
+            body = result.json()
+            assert body["status"] == "answered"
+            assert len(body["transactions"]["items"]) <= 5
+            assert not world.retrievals
+            assert all(request.method == "GET" for request in world.calls)
+            assert any(
+                request.url.params.get("limit") == "5"
+                and request.url.params.get("from") == "2026-11-01"
+                and request.url.params.get("to") == "2026-11-14"
+                for request in world.calls
+            )
+            assert world.bank.COUNTERS["case"] == world.bank.COUNTERS["sr"] == 0
+
+    asyncio.run(run())
+
+
+def test_legacy_run_responses_keep_the_strict_v1_field_contract(world) -> None:
+    from pydantic import ConfigDict, create_model, model_validator
+
+    from app.models.agent import AgentResponse
+    from app.models.validation import ValidationResult
+
+    def allowed_requires_proposal(value: Any) -> Any:
+        if (value.decision == "allowed") != (value.proposal is not None):
+            raise ValueError("Only an allowed decision can carry a proposal")
+        return value
+
+    # Freeze v1 field names while sharing unchanged scalar types with the application.
+    validation_fields: dict[str, Any] = {
+        name: (field.annotation, field)
+        for name, field in ValidationResult.model_fields.items()
+        if name in {"decision", "reason", "evidence", "proposal", "requires_approval"}
+    }
+    validators: dict[str, Any] = {
+        "allowed": model_validator(mode="after")(allowed_requires_proposal)
+    }
+    legacy_validation = create_model(
+        "V1Validation",
+        __config__=ConfigDict(extra="forbid"),
+        __validators__=validators,
+        **validation_fields,
+    )
+    fields: dict[str, Any] = {
+        name: (field.annotation, field)
+        for name, field in AgentResponse.model_fields.items()
+        if name in {"intent", "status", "message", "missing_fields", "answer", "submission"}
+    }
+    fields["validation"] = (legacy_validation | None, None)
+    legacy_response = create_model("V1Response", __config__=ConfigDict(extra="forbid"), **fields)
+
+    async def run() -> None:
+        async with world.clients() as caller:
+            started = await caller.post("/agent/runs", headers=OWNER, json=payload())
+            body = started.json()
+            identifier = body["run_id"]
+            loaded = await caller.get(f"/agent/runs/{identifier}", headers=OWNER)
+            approved = await caller.post(
+                f"/agent/runs/{identifier}/approval",
+                headers=REVIEWER,
+                json={"decision": "approve", "proposal_hash": body["proposal_hash"]},
+            )
+            retried = await caller.post(f"/agent/runs/{identifier}/retry", headers=OWNER)
+            for response in (started, loaded, approved, retried):
+                assert response.status_code < 300, response.text
+                legacy_response.model_validate(response.json()["response"])
+            assert world.bank.COUNTERS["sr"] == 1
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("missing", ["case_details", "transactions"])
+def test_legacy_client_is_directed_to_v2_for_new_clarification_fields(missing: str) -> None:
+    from app.models.agent import LegacyAgentResponse
+
+    response = LegacyAgentResponse.model_validate(
+        {
+            "intent": "missing_information",
+            "status": "needs_clarification",
+            "message": "Details?",
+            "missing_fields": [missing],
+        }
+    )
+    assert response.status == "blocked" and not response.missing_fields
+    assert "v2" in response.message

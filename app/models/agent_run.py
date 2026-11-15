@@ -8,14 +8,14 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.models.agent import AgentRequest, AgentResponse, AgentStatus
+from app.models.agent import AgentRequest, AgentResponse, AgentStatus, LegacyAgentResponse
 from app.models.validation import ValidationResult
 
 
 class ApprovalDecision(BaseModel):
-    """Validated approval decision contract.
+    """Reviewer decision tied to the pending proposal hash.
 
     Attributes:
         decision: Reviewer decision bound to the exact retained proposal hash.
@@ -29,12 +29,12 @@ class ApprovalDecision(BaseModel):
 
 
 class AgentRunResponse(BaseModel):
-    """Validated agent run response contract.
+    """Saved run status, review deadline and latest workflow response.
 
     Attributes:
         run_id: Identifier of the saved workflow to read or resume.
-        status: HTTP or workflow status used by the scenario.
-        created_at: Timezone-aware creation timestamp of the saved run or receipt.
+        status: Current run state or terminal workflow outcome.
+        created_at: Timezone-aware timestamp when the run was created.
         expires_at: Timestamp after which a pending proposal can no longer be approved.
         proposal_hash: Canonical fingerprint binding request, proposal and retained evidence.
         response: Validated answer or workflow result retained for rendering.
@@ -50,6 +50,17 @@ class AgentRunResponse(BaseModel):
     response: AgentResponse | None = None
 
 
+class LegacyAgentRunResponse(AgentRunResponse):
+    response: LegacyAgentResponse | None = None
+
+    @model_validator(mode="after")
+    def hide_unreviewable_proposal(self) -> LegacyAgentRunResponse:
+        if self.response is not None and self.response.status == "blocked":
+            self.status = "blocked"
+            self.proposal_hash = None
+        return self
+
+
 def proposal_digest(request: AgentRequest, validation: ValidationResult) -> str:
     """Bind approval to the exact request, proposal and retained policy evidence.
 
@@ -60,8 +71,17 @@ def proposal_digest(request: AgentRequest, validation: ValidationResult) -> str:
         Canonical SHA-256 fingerprint binding request, proposal and retained evidence.
     """
     body = {
-        "request": request.model_dump(mode="json"),
-        "validation": validation.model_dump(mode="json"),
+        "request": request.model_dump(
+            mode="json",
+            exclude={
+                field
+                for field in ("case_details", "transactions")
+                if getattr(request, field) is None
+            },
+        ),
+        "validation": validation.model_dump(
+            mode="json", exclude={"case_proposal"} if validation.case_proposal is None else set()
+        ),
     }
     return hashlib.sha256(
         json.dumps(body, sort_keys=True, separators=(",", ":")).encode()

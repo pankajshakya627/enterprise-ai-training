@@ -26,8 +26,14 @@ from app.core.config import AgentSettings, Settings
 from app.database.agent_runs import MongoRunStore
 from app.models.agent import AgentRequest, AgentSubmissionRequest
 from app.models.agent_run import AgentRunResponse, ApprovalDecision
-from app.models.validation import SubmittedServiceRequest, ValidationAccess, ValidationResult
+from app.models.validation import (
+    SubmittedCase,
+    SubmittedServiceRequest,
+    ValidationAccess,
+    ValidationResult,
+)
 from app.services.agent import agent_metrics, build_workflow
+from app.services.cases import submit_case
 from app.services.service_requests import submit_service_request
 
 logger = structlog.get_logger()
@@ -100,6 +106,16 @@ class AgentRunService:
             if self.bank is None
             else str(self.bank.base_url) + "\n" + self.bank.headers.get("Authorization", "")
         )
+        if self.config.banking_transport == "mcp":
+            value += "\ntransport=mcp"
+            if self.config.banking_mcp_transport == "http":
+                value += "\nhttp=" + str(self.config.banking_mcp_url)
+                if self.config.banking_mcp_auth_mode == "oauth":
+                    value += "\nauth=oauth"
+                if self.config.banking_mcp_token is not None:
+                    value += "\n" + self.config.banking_mcp_token.get_secret_value()
+                if self.config.banking_mcp_signing_key is not None:
+                    value += "\n" + self.config.banking_mcp_signing_key.get_secret_value()
         return hashlib.sha256(value.encode()).hexdigest()
 
     def _owner(self, record: dict[str, Any]) -> ValidationAccess:
@@ -131,7 +147,7 @@ class AgentRunService:
     def _graph(self, record: dict[str, Any], lease: str) -> CompiledStateGraph:
         async def execute(
             request: AgentRequest, validation: ValidationResult, key: str
-        ) -> SubmittedServiceRequest:
+        ) -> SubmittedServiceRequest | SubmittedCase:
             """Recheck banking identity, execution lease and owner access before the external write.
 
             Args:
@@ -156,6 +172,8 @@ class AgentRunService:
                 raise RunError(409, "The run lease was lost; no new submission was started")
             # Recheck current entitlements immediately before the external write.
             owner = self._owner(record)
+            if request.action == "createCase":
+                return await submit_case(request, validation, self.bank, owner, key)
             return await submit_service_request(
                 AgentSubmissionRequest.model_validate(request.model_dump()),
                 validation,

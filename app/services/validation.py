@@ -37,7 +37,7 @@ SERVICE_REQUEST_RULE = (
 )
 
 
-async def _read_accounts(customer_id: str, client: httpx.AsyncClient) -> CustomerAccounts:
+async def read_accounts(customer_id: str, client: httpx.AsyncClient) -> CustomerAccounts:
     response = await client.get(f"v1/customers/{customer_id}/accounts")
     response.raise_for_status()
     accounts = CustomerAccounts.model_validate_json(response.content, strict=True)
@@ -72,14 +72,27 @@ async def validate_service_request(
         ValueError: Validation evidence date differs from requested scope.
     """
     details = request.action_details
+    is_case = request.action == "createCase"
     if details is not None and details.request_type == "OPT_IN_CIR_2026_07_PART_PREPAY":
         return await validate_opt_in(request, evidence, client, access)
     if (
         request.customer_id not in access.customer_ids
-        or request.action != "createServiceRequest"
+        or request.action not in ("createServiceRequest", "createCase")
         or request.as_of is None
-        or details is None
-        or (details.request_type == "INTEREST_CERTIFICATE" and details.loan_account_id is None)
+        or (
+            is_case
+            and (
+                request.case_details is None
+                or request.case_details.customer_id != request.customer_id
+                or details is not None
+            )
+        )
+        or (not is_case and (details is None or request.case_details is not None))
+        or (
+            details is not None
+            and details.request_type == "INTEREST_CERTIFICATE"
+            and details.loan_account_id is None
+        )
     ):
         return ValidationResult(
             decision="blocked", reason="An authorized service request is required."
@@ -100,8 +113,8 @@ async def validate_service_request(
             reason="The complete applicable POL-OPS-001 clause 5.1 is required.",
         )
     assert request.customer_id is not None
-    accounts = await _read_accounts(request.customer_id, client)
-    if details.loan_account_id is not None:
+    accounts = await read_accounts(request.customer_id, client)
+    if details is not None and details.loan_account_id is not None:
         loan = _selected_loan(accounts, details.loan_account_id)
         if loan is None:
             return ValidationResult(
@@ -117,10 +130,14 @@ async def validate_service_request(
             )
     return ValidationResult(
         decision="allowed",
-        reason="The service-request proposal is permitted by the advisory scope using current "
+        reason=("The case proposal" if is_case else "The service-request proposal")
+        + " is permitted by the advisory scope using current "
         "customer records. Human approval and execution are still required; no request was created.",
         evidence=sources,
-        proposal=ServiceRequestProposal(customer_id=request.customer_id, **details.model_dump()),
+        proposal=ServiceRequestProposal(customer_id=request.customer_id, **details.model_dump())
+        if details is not None
+        else None,
+        case_proposal=request.case_details if is_case else None,
     )
 
 
@@ -170,7 +187,7 @@ async def validate_opt_in(
         )
 
     assert request.customer_id is not None
-    accounts = await _read_accounts(request.customer_id, client)
+    accounts = await read_accounts(request.customer_id, client)
     loan = _selected_loan(accounts, request.action_details.loan_account_id)
     if loan is None:
         return ValidationResult(

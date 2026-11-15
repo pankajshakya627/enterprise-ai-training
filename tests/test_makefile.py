@@ -32,20 +32,33 @@ if Path(sys.argv[0]).name == "curl":
 if sys.argv[1] == "sync":
     record("sync", args=sys.argv[1:])
     sys.exit(0)
+if Path(sys.argv[0]).name == "npx":
+    record("inspector", args=sys.argv[1:])
+    sys.exit(0)
 if "-c" in sys.argv:
     record("prereqs", args=sys.argv[1:])
     if os.environ.get("FAIL_CONFIG"):
         sys.stderr.write("private-configuration-value")
         sys.exit(1)
     sys.exit(0)
-flag = "--port" if "--port" in sys.argv else "--server.port"
-port = sys.argv[sys.argv.index(flag) + 1]
+if "-m" in sys.argv:
+    module = sys.argv[sys.argv.index("-m") + 1]
+    if module.startswith(("app.mcp.", "app.evaluation.")) and module != "app.mcp.banking_server":
+        record("cli", module=module, args=sys.argv[1:])
+        if module == "app.mcp.server":
+            sys.stdout.write("protocol-output")
+        sys.exit(0)
+if "app.mcp.banking_server" in sys.argv:
+    port = "9002"
+else:
+    flag = "--port" if "--port" in sys.argv else "--server.port"
+    port = sys.argv[sys.argv.index(flag) + 1]
 def stop(signum, frame):
     record("stop", port=port)
     sys.exit(0)
 signal.signal(signal.SIGTERM, stop)
 signal.signal(signal.SIGINT, stop)
-record("start", port=port, pid=os.getpid())
+record("start", port=port, pid=os.getpid(), args=sys.argv[1:])
 if port == os.environ.get("FAIL_PORT"):
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
@@ -75,7 +88,7 @@ def make_workspace(tmp_path: Path) -> Workspace:
     (root / ".env.example").write_text("EXAMPLE=synthetic\n")
     binary = tmp_path / "bin"
     binary.mkdir()
-    for name in ("uv", "curl"):
+    for name in ("uv", "curl", "npx"):
         path = binary / name
         path.write_text(STUB)
         path.chmod(0o755)
@@ -93,11 +106,13 @@ def _events(root: Path) -> list[dict[str, Any]]:
 
 
 @contextmanager
-def _stack(workspace: Workspace, **extra: str) -> Iterator[subprocess.Popen[str]]:
+def _stack(
+    workspace: Workspace, target: str = "run", **extra: str
+) -> Iterator[subprocess.Popen[str]]:
     root, command, environment = workspace
     (root / "runtime settings.env").write_text("CONFIGURED=synthetic\n")
     process = subprocess.Popen(
-        [*command, "run"],
+        [*command, target],
         cwd=root,
         env={**environment, **extra},
         stdout=subprocess.PIPE,
@@ -247,3 +262,99 @@ def test_health_checks_every_service_and_reports_failure(
     assert (result.returncode == 0) == (not failed_endpoint)
     assert len(_events(root)) == 4
     assert ("DOWN" in result.stdout) == bool(failed_endpoint)
+
+
+@pytest.mark.parametrize("target", ["run-mcp", "mcp-demo", "mcp-inspect"])
+def test_cli_targets_forward_custom_environment(make_workspace: Workspace, target: str) -> None:
+    root, command, environment = make_workspace
+    (root / "runtime settings.env").write_text("CONFIGURED=synthetic\n")
+    baseline = root / "reviewed baseline.json"
+    baseline.write_text("{}")
+    result = subprocess.run(
+        [*command, target, f"AI_BASELINE={baseline}", "MCP_OUTPUT=demo output.json"],
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=True,
+    )
+    rows = _events(root)
+    assert rows
+    args = rows[0]["args"]
+    assert args[args.index("--env-file") + 1] == "runtime settings.env"
+    if target == "run-mcp":
+        assert result.stdout == "protocol-output"
+    elif target == "mcp-demo":
+        assert args[args.index("--output") + 1] == "demo output.json"
+    elif target == "mcp-inspect":
+        assert rows[0]["event"] == "inspector"
+        assert "--" in args and "app.mcp.server" in args
+
+
+def test_mcp_launch_without_configuration_starts_nothing(make_workspace: Workspace) -> None:
+    root, command, environment = make_workspace
+    result = subprocess.run(
+        [*command, "run-mcp"],
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        timeout=5,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert not _events(root)
+
+
+def test_http_stack_launches_and_cleans_all_five_services(make_workspace: Workspace) -> None:
+    root, _, _ = make_workspace
+    with _stack(make_workspace, target="run-http") as process:
+        deadline = time.monotonic() + 5
+        started = []
+        while time.monotonic() < deadline:
+            started = [row for row in _events(root) if row["event"] == "start"]
+            if len(started) == 5:
+                break
+            time.sleep(0.02)
+        assert {row["port"] for row in started} == {"8000", "8080", "8001", "8501", "9002"}
+        for row in started:
+            assert "BANKING_MCP_TRANSPORT=http" in row["args"]
+        os.killpg(process.pid, signal.SIGTERM)
+        process.communicate(timeout=8)
+        assert len([row for row in _events(root) if row["event"] == "stop"]) == 5
+
+
+def test_banking_http_target_uses_custom_environment(make_workspace: Workspace) -> None:
+    root, command, environment = make_workspace
+    (root / "runtime settings.env").write_text("CONFIGURED=synthetic\n")
+    result = subprocess.run(
+        [*command, "-n", "run-banking-mcp"],
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert '"runtime settings.env"' in result.stdout
+    assert "BANKING_MCP_TRANSPORT=http" in result.stdout
+    assert "app.mcp.banking_server" in result.stdout
+
+
+def test_hosted_stack_starts_only_rag_agent_and_ui(make_workspace: Workspace) -> None:
+    root, _, _ = make_workspace
+    with _stack(make_workspace, target="run-hosted") as process:
+        deadline = time.monotonic() + 5
+        started = []
+        while time.monotonic() < deadline:
+            started = [row for row in _events(root) if row["event"] == "start"]
+            if len(started) == 3 or process.poll() is not None:
+                break
+            time.sleep(0.02)
+        assert {row["port"] for row in started} == {"8000", "8001", "8501"}
+        os.killpg(process.pid, signal.SIGTERM)
+        process.communicate(timeout=8)
+        assert {row["port"] for row in _events(root) if row["event"] == "stop"} == {
+            "8000",
+            "8001",
+            "8501",
+        }

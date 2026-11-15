@@ -15,7 +15,7 @@ from app.core.config import get_ui_settings
 from app.models.answer import AnswerResponse
 from app.models.evaluation import EvaluatedAnswerResponse
 from app.models.retrieval import RetrieveRequest, RetrieveResponse
-from app.ui.agent import agent_workspace
+from app.ui.agent import agent_workspace, chat_workspace, clear_conversation
 
 
 @st.cache_resource
@@ -129,6 +129,14 @@ def open_chat(identifier: str) -> None:
     st.session_state["workspace"] = "Policy chat"
 
 
+def new_chat() -> None:
+    """Reset the active chat without carrying pending customer details to a new query."""
+    if st.session_state["workspace"] == "Agent chat":
+        clear_conversation()
+    else:
+        open_chat(uuid4().hex)
+
+
 def send_question(client: httpx.Client, turn: dict[str, Any]) -> None:
     """Call the existing API; chat history remains local to this UI session."""
     turn.pop("error", None)
@@ -219,7 +227,7 @@ def main() -> None:
     # shortcut: restored open sidebars can shift at bootstrap; revisit after Streamlit layout fixes.
     """Render the configured Streamlit policy and service-request workspaces."""
     st.set_page_config(
-        page_title="NexaAssist · Policy chat",
+        page_title="NexaAssist",
         page_icon=":material/account_balance:",
         layout="centered",
         initial_sidebar_state="collapsed",
@@ -237,25 +245,24 @@ def main() -> None:
     st.session_state.setdefault("conversations", {})
     st.session_state.setdefault("feedback_submitter_id", str(uuid4()))
     st.session_state.setdefault("active_chat", uuid4().hex)
-    st.session_state.setdefault("workspace", "Policy chat")
+    st.session_state.setdefault("workspace", "Agent chat")
     if st.session_state.pop("clear_quality_reference", False):
         st.session_state["quality_reference"] = ""
     conversations = st.session_state["conversations"]
 
     with st.sidebar:
         st.subheader(":material/account_balance: NexaAssist", anchor=False)
-        st.caption("Your NexaBank policy workspace")
+        st.caption("NexaBank policy workspace")
         st.button(
             "New chat",
             icon=":material/edit_square:",
             width="stretch",
-            on_click=open_chat,
-            args=(uuid4().hex,),
+            on_click=new_chat,
             key="new_chat",
         )
         st.radio(
             "Workspace",
-            ["Policy chat", "Review feedback", "Service requests"],
+            ["Agent chat", "Policy chat", "Review feedback", "Service requests"],
             key="workspace",
             label_visibility="collapsed",
         )
@@ -273,7 +280,11 @@ def main() -> None:
                     on_click=open_chat,
                     args=(identifier,),
                 )
-        with st.expander("Policy scope", expanded=True, icon=":material/tune:"):
+        with st.expander(
+            "Policy scope",
+            expanded=st.session_state["workspace"] != "Agent chat",
+            icon=":material/tune:",
+        ):
             as_of = st.date_input(
                 "Policy date",
                 value=datetime.now(ZoneInfo(settings.ui_timezone)).date(),
@@ -296,21 +307,29 @@ def main() -> None:
                 key="response_mode",
                 width="stretch",
             )
-        with st.expander("Answer quality", expanded=True, icon=":material/analytics:"):
-            evaluate_quality = st.toggle(
-                "Evaluate with RAGAS", value=True, key="evaluate_quality", disabled=mode != "Answer"
-            )
-            st.caption("Uses additional model calls to score each new answer.")
-            reference_answer = st.text_area(
-                "Reference answer for the next question (optional)",
-                key="quality_reference",
-                max_chars=8000,
-                placeholder="Paste the expected answer for this question.",
-                disabled=mode != "Answer" or not evaluate_quality,
-                help="Context precision and recall require an expected answer. Exact golden-case matches use the saved reference automatically.",
-            )
+        if st.session_state["workspace"] != "Agent chat":
+            with st.expander("Answer quality", expanded=True, icon=":material/analytics:"):
+                evaluate_quality = st.toggle(
+                    "Evaluate with RAGAS",
+                    value=True,
+                    key="evaluate_quality",
+                    disabled=mode != "Answer",
+                )
+                st.caption("Uses additional model calls to score each new answer.")
+                reference_answer = st.text_area(
+                    "Reference answer for the next question (optional)",
+                    key="quality_reference",
+                    max_chars=8000,
+                    placeholder="Expected answer for this question",
+                    disabled=mode != "Answer" or not evaluate_quality,
+                    help="Context precision and recall require an expected answer. Exact golden-case matches use the saved reference automatically.",
+                )
         st.caption("Synthetic NexaBank policies for training.")
         st.caption("Chats stay in this browser session and reset when it ends.")
+
+    if st.session_state["workspace"] == "Agent chat":
+        chat_workspace(api_client(settings.agent_api_base_url), as_of, product_id.strip() or None)
+        return
 
     if st.session_state["workspace"] == "Service requests":
         agent_workspace(api_client(settings.agent_api_base_url), as_of, product_id.strip() or None)
@@ -334,8 +353,8 @@ def main() -> None:
     if not turns:
         with welcome.container():
             st.space("large")
-            st.title("What would you like to know?", anchor=False)
-            st.markdown("Explore NexaBank policies, with the evidence behind every answer.")
+            st.title("NexaBank policy questions", anchor=False)
+            st.markdown("Check NexaBank policy terms and the sources behind each answer.")
             st.caption("Ask about eligibility, loan limits, fees, or policy changes.")
             st.space("small")
             suggestions = [

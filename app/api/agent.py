@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 import httpx
 import structlog
@@ -15,14 +15,28 @@ from app.api.auth import get_validation_access
 from app.api.dependencies import banking_client, rag_client
 from app.api.operations import health
 from app.core.config import AgentSettings, Settings, get_agent_settings, get_settings
-from app.models.agent import AgentRequest, AgentResponse, AgentSubmissionRequest
+from app.models.agent import (
+    AgentRequest,
+    AgentResponse,
+    AgentSubmissionRequest,
+    LegacyAgentResponse,
+)
 from app.models.validation import SubmittedServiceRequest, ValidationAccess
 from app.services.agent import agent_metrics, orchestrate
 from app.services.service_requests import submit_service_request
 
 router = APIRouter()
+v2_router = APIRouter(prefix="/v2")
 logger = structlog.get_logger()
 router.add_api_route("/health", health, methods=["GET"])
+
+# Older independently deployed clients reject extra response fields.
+LEGACY_RESPONSE_EXCLUDE: dict[str, Any] = {
+    "suggestions": True,
+    "transactions": True,
+    "case_submission": True,
+    "validation": {"case_proposal": True},
+}
 
 
 @router.get("/metrics")
@@ -34,7 +48,14 @@ async def metrics() -> dict[str, int]:
     }
 
 
-@router.post("/agent", response_model=AgentResponse, response_model_exclude={"submission"})
+@router.post(
+    "/agent",
+    response_model=LegacyAgentResponse,
+    response_model_exclude={**LEGACY_RESPONSE_EXCLUDE, "submission": True},
+)
+@v2_router.post(
+    "/agent", response_model=AgentResponse, response_model_exclude={"submission", "case_submission"}
+)
 async def agent(
     request: AgentRequest,
     settings: Annotated[Settings, Depends(get_settings)],
@@ -71,8 +92,8 @@ async def agent(
 
 @router.post(
     "/agent/submit",
-    response_model=SubmittedServiceRequest | AgentResponse,
-    response_model_exclude={"submission"},
+    response_model=SubmittedServiceRequest | LegacyAgentResponse,
+    response_model_exclude={**LEGACY_RESPONSE_EXCLUDE, "submission": True},
 )
 async def submit(
     request: AgentSubmissionRequest,
