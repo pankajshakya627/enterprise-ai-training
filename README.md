@@ -39,6 +39,8 @@ Relevant existing application tests passed: **479**, covering answer validation,
 
 Use a **new Static Site**, separate from the banking API. Connect the guide-only `codex/architecture-guide` branch in `pankajshakya627/enterprise-ai-training`.
 
+[Deploy this guide on Render](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2Fpankajshakya627%2Fenterprise-ai-training%2Ftree%2Fcodex%2Farchitecture-guide). Open this link in your existing signed-in Chrome, review the single static site, and approve the Blueprint. The link selects the guide-only branch.
+
 | Setting | Value |
 | --- | --- |
 | Name | `nexaassist-guide` |
