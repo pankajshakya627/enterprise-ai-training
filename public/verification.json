@@ -1,0 +1,715 @@
+{
+  "snapshot_date": "2026-11-19",
+  "scope": "Running application checkout and companion banking source; no live image inspection",
+  "application": {
+    "branch": "feat/prepayment-validator",
+    "head": "bc87167",
+    "includes_uncommitted_work": true
+  },
+  "banking": {
+    "branch": "codex/claude-user-approved-writes",
+    "head": "3fb1a35",
+    "includes_uncommitted_work": true
+  },
+  "renderer": "@mermaid-js/mermaid-cli 12.2.0 with isolated local headless Chrome",
+  "checks": {
+    "mermaid_cli_rendered": 22,
+    "well_formed_svg": 22,
+    "nonzero_view_boxes": 22,
+    "implementation_source_paths_checked": 76,
+    "browser_review_original_viewer": {
+      "images": 22,
+      "loaded": true,
+      "brokenAnchors": [],
+      "zoomWorks": true,
+      "sourceWorks": true,
+      "externalResources": [],
+      "bodyOverflow": false,
+      "mobileOverflow": false,
+      "errors": [],
+      "mode": "Offline file URL in isolated headless Chrome"
+    },
+    "current_site_browser_review": "Pending: user requested existing Chrome only; extension connection is unavailable.",
+    "manual_semantic_review": {
+      "date": "2026-11-19",
+      "scope": "Current guide, article and explorer claims against referenced source; all 76 file hashes unchanged",
+      "corrections": [
+        "Legacy environment training credential can authorize scoped one-shot API reads; named access is required by the UI session and durable runs.",
+        "Published source references are paths, not links to unpublished application files."
+      ],
+      "whole_repository_docs_audit": "137 integrity issues reported, largely historical snapshots and legacy links; no claim that all repository documentation passes."
+    },
+    "current_site_dom_tests": {
+      "routes": [
+        "overview",
+        "architecture",
+        "workflows",
+        "operations",
+        "limits"
+      ],
+      "diagramSelections": 22,
+      "workflowStages": 22,
+      "links": 198,
+      "accessibility": [
+        {
+          "page": "#overview",
+          "violations": [],
+          "incomplete": [
+            "color-contrast",
+            "label-content-name-mismatch",
+            "landmark-one-main",
+            "page-has-heading-one"
+          ],
+          "passes": 26
+        },
+        {
+          "page": "#architecture/22-overall",
+          "violations": [],
+          "incomplete": [
+            "color-contrast",
+            "label-content-name-mismatch",
+            "landmark-one-main",
+            "page-has-heading-one"
+          ],
+          "passes": 38
+        },
+        {
+          "page": "#workflows/case",
+          "violations": [],
+          "incomplete": [
+            "color-contrast",
+            "label-content-name-mismatch",
+            "landmark-one-main",
+            "page-has-heading-one"
+          ],
+          "passes": 32
+        },
+        {
+          "page": "#operations",
+          "violations": [],
+          "incomplete": [
+            "color-contrast",
+            "label-content-name-mismatch",
+            "landmark-one-main",
+            "page-has-heading-one"
+          ],
+          "passes": 31
+        },
+        {
+          "page": "#limits",
+          "violations": [],
+          "incomplete": [
+            "color-contrast",
+            "label-content-name-mismatch",
+            "landmark-one-main",
+            "page-has-heading-one"
+          ],
+          "passes": 26
+        },
+        {
+          "page": "blog.html",
+          "violations": [],
+          "incomplete": [
+            "color-contrast",
+            "landmark-one-main",
+            "page-has-heading-one"
+          ],
+          "passes": 31
+        }
+      ],
+      "notVerified": [
+        "Real browser layout at 320, 768, 1024 and 1440 pixels",
+        "Real keyboard traversal and rendered color contrast",
+        "Actual browser download behavior",
+        "Render deployment and live service readiness"
+      ],
+      "jsdomLimitations": [
+        "Not implemented: HTMLCanvasElement's getContext() method: without installing the @napi-rs/canvas npm package"
+      ],
+      "externalAssetRequests": [],
+      "status": "Passed DOM and source checks; browser verification remains pending"
+    },
+    "targeted_application_regressions": {
+      "command": ".venv/bin/python -m pytest tests/test_answer.py tests/test_staff_login.py tests/test_case_notes.py tests/test_transactions.py tests/test_banking_mcp.py tests/test_agent_runs.py -q --no-cov",
+      "passed": 479,
+      "seconds": 30.13,
+      "warnings": "Existing mongomock UTC deprecation warnings; pytest cache write denied. No failed tests.",
+      "scope": "Mocked regression evidence, not fresh live model or deployed-bank evidence."
+    },
+    "declared_text_color_token_contrast": {
+      "body on canvas": 14.86,
+      "muted on canvas": 5.95,
+      "accent on white": 5.87,
+      "accent on tint": 5.4
+    },
+    "declared_text_color_token_contrast_scope": "Computed declared token pairs only; does not replace rendered contrast or diagram inspection.",
+    "diagram_15_label_review": "Original CLI-rendered SVG label changed from Named customer to Scoped customer; XML and matching Mermaid checked. No new browser launched."
+  },
+  "diagrams": [
+    {
+      "id": "01-profiles",
+      "title": "Runtime profiles and process boundaries",
+      "svg": "map-1.svg",
+      "svg_sha256": "0b58eafba8d37c32b0bd57b3ebd3a2f79d0bd8db62d751cc18f2bc199ad87f53",
+      "view_box": [
+        4.0,
+        4.0,
+        885.078125,
+        1313.29736328125
+      ],
+      "source_sha256": "c29f92c61bfaae49352dd4acdb6378a846ad193d2c1048d97709bef40a2f086e",
+      "sources": [
+        "Makefile",
+        "app/api/dependencies.py",
+        "app/services/agent.py",
+        "app/mcp/BANKING.md",
+        "@bank/render.yaml"
+      ]
+    },
+    {
+      "id": "02-streamlit",
+      "title": "Streamlit UI service",
+      "svg": "map-2.svg",
+      "svg_sha256": "1c5999173a486f5879d162d307861a1ef9f04f0977735c529f9a96829e816323",
+      "view_box": [
+        4.0,
+        4.0,
+        1231.46875,
+        597.0416870117188
+      ],
+      "source_sha256": "304242bd99f34a3f3fcaef5c7dfcdda75593e35a84b991ec083a87f7ae623c6e",
+      "sources": [
+        "app/streamlit_app.py",
+        "app/ui/app.py",
+        "app/ui/agent.py"
+      ]
+    },
+    {
+      "id": "03-agent-api",
+      "title": "Agent API service",
+      "svg": "map-3.svg",
+      "svg_sha256": "b99f2fc6dcdbaf2a416697474cd655866933388b4931676f3bc32597e454ec88",
+      "view_box": [
+        4.0,
+        4.0,
+        1273.640625,
+        954.67236328125
+      ],
+      "source_sha256": "c86bdcd63faa264bc2937169c0b9d764af1c62cffb8d6c34cd6bf98e80eb581a",
+      "sources": [
+        "app/agent_main.py",
+        "app/api/agent.py",
+        "app/api/agent_runs.py",
+        "app/api/auth.py",
+        "app/services/agent.py",
+        "app/services/agent_runs.py"
+      ]
+    },
+    {
+      "id": "04-rag-api",
+      "title": "RAG API service",
+      "svg": "map-4.svg",
+      "svg_sha256": "4cde9cc39ee3402cebc7123f896450fb9525fa9124a519d7b503534065e07524",
+      "view_box": [
+        4.0,
+        4.0,
+        1000.0,
+        929.29736328125
+      ],
+      "source_sha256": "7e2d3e906f14ab80d8dea0e96e86df8769661eb092e5763cf40313fa522cd35c",
+      "sources": [
+        "app/main.py",
+        "app/core/lifespan.py",
+        "app/api/retrieval.py",
+        "app/api/answer.py",
+        "app/api/feedback.py",
+        "app/api/operations.py",
+        "app/services/answer.py"
+      ]
+    },
+    {
+      "id": "05-policy-mcp",
+      "title": "Policy MCP service",
+      "svg": "map-5.svg",
+      "svg_sha256": "35599aec8242c2dc8283339158eda714c7675b069b26a4b51f0c3cc6f7847764",
+      "view_box": [
+        4.0,
+        4.0,
+        1262.328125,
+        354.6666564941406
+      ],
+      "source_sha256": "de02fe1e1dbcd877d5b19a66b0f4b379f1f610b6874c70af47837a125fdbbc9d",
+      "sources": [
+        "app/mcp/server.py",
+        "app/services/agent_mcp_retrieval.py",
+        "app/services/agent_retrieval.py",
+        "app/chains/prompts/mcp.py"
+      ]
+    },
+    {
+      "id": "06-banking-mcp",
+      "title": "Banking MCP service and trust boundaries",
+      "svg": "map-6.svg",
+      "svg_sha256": "b0a12c6b6108d53a93e1d8ceb3641b131052a90a8574486146402a5118079fca",
+      "view_box": [
+        4.0,
+        4.0,
+        829.59375,
+        1221.5
+      ],
+      "source_sha256": "6df82ae4af88d63376f88d2134579f130d1cf19fae2641412bf131a4265bdb98",
+      "sources": [
+        "app/services/banking_mcp.py",
+        "app/models/banking_mcp.py",
+        "app/mcp/banking_server.py",
+        "app/mcp/banking_http.py",
+        "app/mcp/horizon_login.py",
+        "@bank/app/mcp/horizon.py",
+        "@bank/app/mcp/claude_approved.py"
+      ]
+    },
+    {
+      "id": "07-banking-api",
+      "title": "Banking API service: persistent deployment and local mock",
+      "svg": "map-7.svg",
+      "svg_sha256": "4a86a2068b58322781f892593ac0e33e222912494c9e83a24ba90a0ac27af92d",
+      "view_box": [
+        4.0,
+        4.0,
+        828.0,
+        1429.057861328125
+      ],
+      "source_sha256": "745c37e68e893b1a3e8973071f7bbc7df7e774ca8a89eb6cd8c6a8da301a6647",
+      "sources": [
+        "@bank/app/banking_main.py",
+        "@bank/app/api/banking.py",
+        "@bank/app/services/banking.py",
+        "@bank/app/database/banking.py",
+        "@bank/render.yaml",
+        "nexa_synthetic_data/api/mock_server/server.py"
+      ]
+    },
+    {
+      "id": "08-data",
+      "title": "Data ownership and retention",
+      "svg": "map-8.svg",
+      "svg_sha256": "119e45fe1d6f469796646fcf408c9694ec5b7e1a703c9b3de1349464bc8a4f55",
+      "view_box": [
+        4.0,
+        4.0,
+        547.1875,
+        1699.103515625
+      ],
+      "source_sha256": "b9427b600013cef1913fa0a7629ca6afdbc52ee0e7cd2826a29d192e9f3941b6",
+      "sources": [
+        "app/core/config.py",
+        "app/database/mongo.py",
+        "app/database/agent_runs.py",
+        "app/database/staff_credentials.py",
+        "app/database/feedback.py",
+        "@bank/app/database/banking.py"
+      ]
+    },
+    {
+      "id": "09-models",
+      "title": "Model APIs and optional reranking service",
+      "svg": "map-9.svg",
+      "svg_sha256": "f00b01cbc74559723c2a8c02d14a6b9305c8c650aeee0eba5d261d9072303feb",
+      "view_box": [
+        4.0,
+        4.0,
+        1205.109375,
+        554.75
+      ],
+      "source_sha256": "9dad578e44233d4e0a08a44bbf86ab5adcf8f47f3ffbe18ea441f6e84500e163",
+      "sources": [
+        "app/chains/llm.py",
+        "app/chains/embeddings.py",
+        "app/chains/rerank.py",
+        "app/compose.reranker.yaml",
+        "app/evaluation/ragas_metrics.py"
+      ]
+    },
+    {
+      "id": "10-telemetry",
+      "title": "Observability service and export paths",
+      "svg": "map-10.svg",
+      "svg_sha256": "b07668177999711dad49333c2682f9212c097168c8e13de03db8914667d10b29",
+      "view_box": [
+        4.0,
+        4.0,
+        980.1968994140625,
+        634.5
+      ],
+      "source_sha256": "a5648edfc03f4dd59c2dd7370b38125efadf4501f14094a177e846b8c928f19e",
+      "sources": [
+        "app/core/lifespan.py",
+        "app/core/logging.py",
+        "app/core/telemetry.py",
+        "app/core/observability.py",
+        "app/compose.datadog.yaml"
+      ]
+    },
+    {
+      "id": "11-authentication",
+      "title": "Workflow: staff login and independent service authentication",
+      "svg": "map-11.svg",
+      "svg_sha256": "5d23a7c08ab27473fb6294d740fcdd888443eff9430426fba82b07919ce73601",
+      "view_box": [
+        -50.0,
+        -10.0,
+        1450.0,
+        1154.0
+      ],
+      "source_sha256": "b6bf0490ec429e11d3e2ec2266e780e12c967022f25ee64ef6ab663ebca65f30",
+      "sources": [
+        "app/api/auth.py",
+        "app/database/staff_credentials.py",
+        "app/ui/agent.py",
+        "app/mcp/horizon_login.py",
+        "app/services/banking_mcp.py"
+      ]
+    },
+    {
+      "id": "12-policy-answer",
+      "title": "Workflow: policy retrieval and validated answering",
+      "svg": "map-12.svg",
+      "svg_sha256": "8e28f1d9602a1116b16dc80bff741ae570d3b2c3c83fb00893427c6ee379e7c3",
+      "view_box": [
+        -50.0,
+        -10.0,
+        1453.0,
+        1261.0
+      ],
+      "source_sha256": "ef88a1a269dede847312d229c638f4abc0097c734860f337c70eb4ad1fa4af2b",
+      "sources": [
+        "app/services/agent.py",
+        "app/services/agent_mcp_retrieval.py",
+        "app/services/answer.py",
+        "app/chains/answer.py",
+        "app/ui/app.py"
+      ]
+    },
+    {
+      "id": "13-retrieval",
+      "title": "Workflow: evidence expansion and citation gate",
+      "svg": "map-13.svg",
+      "svg_sha256": "78c2ad9f73e2da9944e57309833d8b3ba8a15893ad9c0bed3ecba345efdf5e86",
+      "view_box": [
+        4.0,
+        4.0,
+        508.2943115234375,
+        2320.65673828125
+      ],
+      "source_sha256": "cec797228bee9064979431dd786063e0f8e0f9165caee3840158ada2b86b1694",
+      "sources": [
+        "app/chains/retrieval.py",
+        "app/database/retrieval.py",
+        "app/chains/context.py",
+        "app/chains/answer.py"
+      ]
+    },
+    {
+      "id": "14-langgraph",
+      "title": "Workflow: complete LangGraph routing",
+      "svg": "map-14.svg",
+      "svg_sha256": "5523e4d60ed9c6361ac65dcad01659e6689c295f8162c1f5e34aa1cba0045c25",
+      "view_box": [
+        4.0,
+        4.0,
+        1068.421875,
+        1477.678466796875
+      ],
+      "source_sha256": "928cee100358de63345d1946228a7d6cc7e2384581e535567f7ef58a3131a339",
+      "sources": [
+        "app/agents/orchestrator.py",
+        "app/agents/guardrails.py",
+        "app/services/agent.py",
+        "app/services/agent_runs.py"
+      ]
+    },
+    {
+      "id": "15-customer-reads",
+      "title": "Workflow: accounts, income and bounded transactions",
+      "svg": "map-15.svg",
+      "svg_sha256": "88b24395517909aa965e693e37e24ca21de67bf9509456d6ec11a2c518737028",
+      "view_box": [
+        4.0,
+        4.0,
+        744.0,
+        1403.65673828125
+      ],
+      "source_sha256": "426965c2a5c3df0ed6a834ea4ca79a39fac9225877f5259a1abcdfc7eec6980e",
+      "sources": [
+        "app/services/customer_context.py",
+        "app/services/transactions.py",
+        "app/agents/orchestrator.py",
+        "app/services/banking_mcp.py"
+      ]
+    },
+    {
+      "id": "16-action-validation",
+      "title": "Workflow: supported banking actions and validation",
+      "svg": "map-16.svg",
+      "svg_sha256": "2a3366242cd17d1b14adac01cb10291c7ab54e8233849c8bba30cb1232048df8",
+      "view_box": [
+        4.0,
+        4.0,
+        701.03125,
+        1580.15673828125
+      ],
+      "source_sha256": "5c248471cb0cf50b802679580f4786376f6c8a367e86d1defcc5829546d415d5",
+      "sources": [
+        "app/services/cases.py",
+        "app/services/validation.py",
+        "app/services/service_requests.py",
+        "app/models/validation.py",
+        "app/agents/orchestrator.py"
+      ]
+    },
+    {
+      "id": "17-approval",
+      "title": "Workflow: distinct approval, execution and ambiguous recovery",
+      "svg": "map-17.svg",
+      "svg_sha256": "c2fde7dbc2975a3712e7b94838cc8d58a6e4283d1ce6270e01ef0ebc88fe9b9a",
+      "view_box": [
+        -50.0,
+        -10.0,
+        1657.0,
+        1675.0
+      ],
+      "source_sha256": "8c1f969686fc6298c78985f9d2023e141df1155097f0ca7585cecf1f6a11a989",
+      "sources": [
+        "app/services/agent_runs.py",
+        "app/database/agent_runs.py",
+        "app/models/agent_run.py",
+        "app/models/banking_mcp.py",
+        "@bank/app/database/banking.py"
+      ]
+    },
+    {
+      "id": "18-lifecycle",
+      "title": "Workflow: observed saved-run lifecycle",
+      "svg": "map-18.svg",
+      "svg_sha256": "93e6c7b01ce0e31c11c21e4d55f24e198dac1b57dc3ca298cfbd936fcc69104c",
+      "view_box": [
+        4.0,
+        4.0,
+        1416.00634765625,
+        1034.626953125
+      ],
+      "source_sha256": "63effaf2eafda7bc9fbb8e6e64d67d206bbdf3f2028fe7716bb4b27861f57f37",
+      "sources": [
+        "app/services/agent_runs.py",
+        "app/models/agent_run.py",
+        "app/database/agent_runs.py"
+      ]
+    },
+    {
+      "id": "19-ingestion",
+      "title": "Workflow: authoritative policy ingestion and retirement",
+      "svg": "map-19.svg",
+      "svg_sha256": "0662acfb4ecbf702ebc9d35442f2152312d9c11fd3a16054399446d02b2ef846",
+      "view_box": [
+        4.0,
+        4.0,
+        552.0,
+        1548.5
+      ],
+      "source_sha256": "df777cad74d9bd662bd698d7539c6ad532300dbb5974968996dbfabda6ecd98a",
+      "sources": [
+        "app/services/ingestion.py",
+        "app/chains/ingestion.py",
+        "app/chains/parsing.py",
+        "app/chains/chunking.py",
+        "app/database/indexes.md",
+        "nexa_synthetic_data/document_register.json"
+      ]
+    },
+    {
+      "id": "20-feedback",
+      "title": "Workflow: feedback persistence and review",
+      "svg": "map-20.svg",
+      "svg_sha256": "0a5685d37461f13e31ce3941f25a3c4fd6fe387b42db1d6203609f31f6a37944",
+      "view_box": [
+        -50.0,
+        -10.0,
+        1251.0,
+        948.0
+      ],
+      "source_sha256": "2e16b77ad6d4705c9432d8d255a2243406ef0fbc8705ae9c6293e60724761a2d",
+      "sources": [
+        "app/ui/app.py",
+        "app/api/feedback.py",
+        "app/services/feedback.py",
+        "app/database/feedback.py"
+      ]
+    },
+    {
+      "id": "21-evaluation",
+      "title": "Workflow: quality evaluation and CI gates",
+      "svg": "map-21.svg",
+      "svg_sha256": "3bfaa1dd08701f1ae5e22ec469ba5e0ed0c404c0a08d1d15959d51cda155326e",
+      "view_box": [
+        4.0,
+        4.0,
+        1225.734375,
+        1219.0
+      ],
+      "source_sha256": "cc0da1360ee2d3acebd9f409aa56870dd38a21249e7f33b34c13bf8038fae7f4",
+      "sources": [
+        ".github/workflows/quality.yml",
+        ".github/workflows/ai-evaluation.yml",
+        "CONSTRAINTS.md",
+        "app/evaluation/run.py",
+        "app/evaluation/phase_gate.py",
+        "app/services/evaluation.py"
+      ]
+    },
+    {
+      "id": "22-overall",
+      "title": "Overall: entire NexaAssist application",
+      "svg": "map-22.svg",
+      "svg_sha256": "00987b2a8a5c0cef84c875fcac9e7dee647915e557e457f1aa5812658d8aa3aa",
+      "view_box": [
+        4.0,
+        4.0,
+        1456.609375,
+        1602.79736328125
+      ],
+      "source_sha256": "4b49030e8155efab603f51b1dfa87fab484aba69b2c4c678618ca26ee9ecda2b",
+      "sources": [
+        "app/ui/app.py",
+        "app/agent_main.py",
+        "app/main.py",
+        "app/services/agent.py",
+        "app/agents/orchestrator.py",
+        "app/services/agent_runs.py",
+        "app/chains/retrieval.py",
+        "app/mcp/server.py",
+        "app/mcp/banking_server.py",
+        "@bank/app/mcp/horizon.py",
+        "@bank/app/banking_main.py",
+        "@bank/app/database/banking.py"
+      ]
+    }
+  ],
+  "implementation_file_sha256": {
+    "Makefile": "0c22f7c82c9c16c189955ec5b850d3293da8c380668393babb2ff7997cc8ac26",
+    "app/api/dependencies.py": "63a7763c22f9deb9c0f4b779b36a00c1e031184b6dd2fa57959303fc706a12fb",
+    "app/services/agent.py": "845c09fc588b272042c27177143f8b03105307dc3cbd24b97ffa5b574da7eb21",
+    "app/mcp/BANKING.md": "d9ac3de3c3c38db5f8e9ea35f14b23fd6c3cdb4b39bc8805f5cfb377af9e3ad6",
+    "@bank/render.yaml": "e65c984c131e6f9d61c06dc416dbf23b8cfdee1ff35bd1be56a2dd926483e0e0",
+    "app/streamlit_app.py": "24b311dbd9861bddae82ff3cfe180f405c39a00380c27f2afef9a5ca19d951f8",
+    "app/ui/app.py": "05ccd484ba96693cd0d71c7022b03028cb3befb0ec84850b9440396efd3712d8",
+    "app/ui/agent.py": "1df34c66139fa275504f3c23b82e693608a965812a06c07a199fc91a5a73189f",
+    "app/agent_main.py": "0ca40756f5ee7f634531102f28beae7499c02f12ee6438960e64f881ac20a37b",
+    "app/api/agent.py": "8662379f02a12ebe091b58c0fc73c38e09d5e5e7a589070af910db1d481bdbb6",
+    "app/api/agent_runs.py": "a757adb94e12ea48af43a19f3f5aa02804f6d70857d7fc31f8e23928d7f63493",
+    "app/api/auth.py": "fe3c173e33c280e1ac1fc399b85a22f13e43032bcfc519d5da1c9000b8ae1dd6",
+    "app/services/agent_runs.py": "3d241a8179b4aabdba743fb537939d799ab2974e870bb0ab937e1febe12805bc",
+    "app/main.py": "7f00072a70e83ff3dabaeb0af60a8ba2c803e2613b27da4b61c3c99a4b46e4c3",
+    "app/core/lifespan.py": "a8e6102319b78e392c71e30340f32cc5705bbe30c5e94a073d70f3fc7424de25",
+    "app/api/retrieval.py": "975ea19cba99ac62237b3d3f2c8d39240a3b746be9d51a00eff95af24c5ba188",
+    "app/api/answer.py": "edf4933bd4cee1a4ce075d69293b2c6b897fb5988cb4f573d74cf9a14f0244dc",
+    "app/api/feedback.py": "aee20c3fa76c258faf386b3efcba0a49624bd0b1c6284ed83c76e14c4887c87d",
+    "app/api/operations.py": "13515e652b98ce5363ec263bf0d39a90113f7e0b96655635fa1101766856030e",
+    "app/services/answer.py": "3cac350e7040e03f019a9b29feefc99f2f3fa41469f91d16136bc929fa629a8d",
+    "app/mcp/server.py": "ebdb9bb4a7cccb5c519bd904003aa7629f861215d4dfd3346fefd9abc0d58baf",
+    "app/services/agent_mcp_retrieval.py": "7f31b1993eacca060ece5afc274d000d3b6f79a236fbc11bcbee206946664abe",
+    "app/services/agent_retrieval.py": "af0ce9e18d10ce49d980553cf4cf95df95c07bc4c157ea8a037a4ba79d8bc5e2",
+    "app/chains/prompts/mcp.py": "d8b9e099ae5ee5030bae00991bd675b98b71cf1702d089ce2f3e330c47309e6e",
+    "app/services/banking_mcp.py": "001f8a99a21eb352e8d97bd17100e2d00b161f232844cc7d9e2fb46113ddcf39",
+    "app/models/banking_mcp.py": "b11510056aab9124651bac38da07188a89490e0bea672bad6a15067bcb99af9a",
+    "app/mcp/banking_server.py": "ec25744714d201adb9909fcb7a1ebf70f23e3826d8e35a4afd8f30fecfea9b04",
+    "app/mcp/banking_http.py": "3d223f0d398418bcfce96f57d6364dfef9866d78331dae6c0149915f80de4f6e",
+    "app/mcp/horizon_login.py": "5ef36a1bdf24288d61d60dcb50d1cb84167c3ef1bbf8c33946d02d19395261d3",
+    "@bank/app/mcp/horizon.py": "f88d58e772f50524cdb75103b33f46a2920d454c671d2a894142d4e567b77f81",
+    "@bank/app/mcp/claude_approved.py": "7310b715b639ba3537dc14c6c749e2bbec6fa57f73dc8bf9ba26e4ee729e002f",
+    "@bank/app/banking_main.py": "c51c842f4aa6dceb4907bfdc4f65a0994e793549847069e76b49344d6a3194c4",
+    "@bank/app/api/banking.py": "8dd1128fa71db6790a92a3b63f2bb654d6af305e1b225c9f58ea24d6a5034d0d",
+    "@bank/app/services/banking.py": "7af5a07900f24442e0a1ed7e5dfe5e4b9015bd70bc44c93f1ca15da77a49dcd3",
+    "@bank/app/database/banking.py": "7dfc51ed09a268f352dc2f05ec150a5b7d43bb68b853dc3f46f5228beb01f914",
+    "nexa_synthetic_data/api/mock_server/server.py": "c3c7a77d4336f805171a4bc12740005d7e74a48bba732bd4ac1673c0cb4b7524",
+    "app/core/config.py": "df93cf5c6ba70b1559a2f209b7140f8103719be5778bdac339b97b3ca6a0706f",
+    "app/database/mongo.py": "0b5995038e24367d8a116812f3846a47fd4e894375acb750381ef691c08aceee",
+    "app/database/agent_runs.py": "87bb0f4fcd398bc7c763e81b56df388865512d0ec3d8974b99099197497ebbd5",
+    "app/database/staff_credentials.py": "a661dcb5db786bc9398bcc136b0c9768db139ec63f217bbb4734da224959164d",
+    "app/database/feedback.py": "a3a957a3e8d416fd73bb5d135bbe89c1c0cb040fcc26c8ce0f42ba56fc4f04a5",
+    "app/chains/llm.py": "3479ca7393e200ac33e2d66da49ed451c55cf80048e4abf76592d07dc362cfb5",
+    "app/chains/embeddings.py": "4cd55b57c33cc3be4ff877af2cd1bf2851a0c4da7f00d189a2b9acc19b934924",
+    "app/chains/rerank.py": "28bae161c05cdf24f1efa5d73726bb3330e41a4031960313a414208d5fdd9edb",
+    "app/compose.reranker.yaml": "ca2cd5045cc44313d852f9ef93c286ece76524fefb229ae4c83033a4d333176d",
+    "app/evaluation/ragas_metrics.py": "625fc4051f83e1b28b107f817c4cdfe40c00062461ec9c6cff7b4a2dede71dd4",
+    "app/core/logging.py": "438d8f3ae41f7e5e15d4d0734dc786780886070c38d9c5f012fc05d3047aaa3f",
+    "app/core/telemetry.py": "cf5400687fd2b24d1276d735f85e57a6f8728eaac9439745a0fa8b506dd9794f",
+    "app/core/observability.py": "a7930dda6f82c51dbeb3f874fad985a2cb52d03db32a46d9cea8393926fcfb7f",
+    "app/compose.datadog.yaml": "3f587b43f678da056acf8a9bd7795e9947226d2fbffcce5a556c0351809a5b01",
+    "app/chains/answer.py": "c73e9cb5fe9610bd0099ea49325fe50cf156be7da03f2329b6f005489c153639",
+    "app/chains/retrieval.py": "b183d3425ee02fb19fdc19e5f1d7e25f6834da7904b211329978fba91fe21c8b",
+    "app/database/retrieval.py": "0907724391e039df0bb63dbed41cfc6fa1455f63086f19c33e30ea9a8e56519d",
+    "app/chains/context.py": "ff199fae8738eadac362cb2b736c0f90c2d5aa33e4a8112713267a2326d63065",
+    "app/agents/orchestrator.py": "695859197491485d37cecc81d88ad1db39c91a4f6c7df6fc0d9faf0ace4edc04",
+    "app/agents/guardrails.py": "f80b24ead1833f404e0a4dca936153bbe2145c04d8a1ea6ae8f60762b5691b69",
+    "app/services/customer_context.py": "1ccaa35fa6da5e3a59a1e197753f93e7d0ef3e09de913fd7df638dd6035805d9",
+    "app/services/transactions.py": "9acf41d41694ce4e6b9cc0085887f5698a109d591a05885b11606cd5cf8536aa",
+    "app/services/cases.py": "2af76229d36087a407f3f293033fea1a71601eba46e42c769dd8ea02707ae4cc",
+    "app/services/validation.py": "b94d5d72610093cba68533211c678276b16c6f19d1134d5ea3d21a7718861c0e",
+    "app/services/service_requests.py": "e2f74a9a56116c2b9d275564c4b5b121f9b287d151786478eb411617cafe1e9b",
+    "app/models/validation.py": "3e59b10cd000f81a3c4b633fc45613d89dfb5e132717327f02dd68a189aba53c",
+    "app/models/agent_run.py": "321522929a532173b2f351a3e6ab17f084297d26dcd2792ae07d145c943b56af",
+    "app/services/ingestion.py": "a04c5e7faaa69bae9c445591cc55710fb9bb3108598aa949b0b8ef8ca841ca68",
+    "app/chains/ingestion.py": "b1c8a0493bc8378f3f72474fc209290d1cc7774fb1b77f318f2a1f1cc2b34039",
+    "app/chains/parsing.py": "ab328ea8fe2c6cabd495d331a78cf0a53a0b88a92b0a252ec193e695a055baac",
+    "app/chains/chunking.py": "670c6be397d8aa07d115609ced2bc60188d07a01f2cd0b48c162b917eba5b805",
+    "app/database/indexes.md": "cf9c9426fa2135e8e7a4418306ead0687dcb4f7015845b42e9a4117e6ba10f63",
+    "nexa_synthetic_data/document_register.json": "34f5bc56cea2dc7b9e690d29494b8e4381e5d5f54b86a9810b475cd193ae03f9",
+    "app/services/feedback.py": "daf0532cc3d7780303737d7c60fa01916b6b6c331792c02d25be7954ef691040",
+    ".github/workflows/quality.yml": "166d8fdd047cc7e7de724239f93166b26f1565ccf210a9432c5d0eba5cde8535",
+    ".github/workflows/ai-evaluation.yml": "41b3a7a69e261d85a0a78b5c9b611f132206b75aca6173746b7881f0e2fcbaef",
+    "CONSTRAINTS.md": "99f6d7912a69ca4eaa5ab024506025680a6250d4a8c06470816bd3a0aafc44f5",
+    "app/evaluation/run.py": "fc434a83a006b3db359b10c3c293ec30cd41cfecf5b06b65471b68d16bf26478",
+    "app/evaluation/phase_gate.py": "0b1ce6f1ae5d2d03b9fd84a5349eb5298b5090ae821b62e363223956514dc63b",
+    "app/services/evaluation.py": "7987799913d13a2fca7a8b2e00365442742073fc04a42f5444ce5fd870af5266"
+  },
+  "not_checked": [
+    "Live deployment image parity",
+    "Live external service readiness",
+    "Banking writes",
+    "Fresh model evaluation",
+    "Runtime regression suite for this documentation-only change"
+  ],
+  "original_repository_guide_sha256": "f287bcac3cb47785e5c078d9ec4997781b5caf08e3a802ff9e314551c7f1d974",
+  "published_guide_sha256": "d890c9505f8fe700b5a86bd5a286ccfe00717fd0e77a34bb14a96c379c3b7f52",
+  "repository_guide_sha256": "397d453190174b90a89a67ea92e6685a82559589950f71e52e93303a90b70aa2",
+  "site_assets_sha256": {
+    "map-2.svg": "1c5999173a486f5879d162d307861a1ef9f04f0977735c529f9a96829e816323",
+    "map-3.svg": "b99f2fc6dcdbaf2a416697474cd655866933388b4931676f3bc32597e454ec88",
+    "map-1.svg": "0b58eafba8d37c32b0bd57b3ebd3a2f79d0bd8db62d751cc18f2bc199ad87f53",
+    "blog.html": "5343cfa6437f91c01db66970f1f00e492a0789eca4577d91397cba9f44634a33",
+    "map-4.svg": "4cde9cc39ee3402cebc7123f896450fb9525fa9124a519d7b503534065e07524",
+    "index.html": "49dccecdb6ee9f592ff47e7fc4115b2cf0d59b6c627ee6b6b80fb566ce44e1b5",
+    "map-5.svg": "35599aec8242c2dc8283339158eda714c7675b069b26a4b51f0c3cc6f7847764",
+    "map-7.svg": "4a86a2068b58322781f892593ac0e33e222912494c9e83a24ba90a0ac27af92d",
+    "styles.css": "79290bf824f2c87d57544b849f466163bb01cd895fce12fde90d061f5f51b5c1",
+    "map-6.svg": "b0a12c6b6108d53a93e1d8ceb3641b131052a90a8574486146402a5118079fca",
+    "map-13.svg": "78c2ad9f73e2da9944e57309833d8b3ba8a15893ad9c0bed3ecba345efdf5e86",
+    "architecture-data.js": "2ec4c91e62d5ce18d8837dcb1b43f9bb3603a4da38ed9a0a32cafd5f8ad14843",
+    "map-12.svg": "8e28f1d9602a1116b16dc80bff741ae570d3b2c3c83fb00893427c6ee379e7c3",
+    "map-10.svg": "b07668177999711dad49333c2682f9212c097168c8e13de03db8914667d10b29",
+    "map-11.svg": "5d23a7c08ab27473fb6294d740fcdd888443eff9430426fba82b07919ce73601",
+    "map-15.svg": "88b24395517909aa965e693e37e24ca21de67bf9509456d6ec11a2c518737028",
+    "map-14.svg": "5523e4d60ed9c6361ac65dcad01659e6689c295f8162c1f5e34aa1cba0045c25",
+    "map-16.svg": "2a3366242cd17d1b14adac01cb10291c7ab54e8233849c8bba30cb1232048df8",
+    "map-17.svg": "c2fde7dbc2975a3712e7b94838cc8d58a6e4283d1ce6270e01ef0ebc88fe9b9a",
+    "map-19.svg": "0662acfb4ecbf702ebc9d35442f2152312d9c11fd3a16054399446d02b2ef846",
+    "map-18.svg": "93e6c7b01ce0e31c11c21e4d55f24e198dac1b57dc3ca298cfbd936fcc69104c",
+    "map-20.svg": "0a5685d37461f13e31ce3941f25a3c4fd6fe387b42db1d6203609f31f6a37944",
+    "map-21.svg": "3bfaa1dd08701f1ae5e22ec469ba5e0ed0c404c0a08d1d15959d51cda155326e",
+    "architecture-guide.md": "d890c9505f8fe700b5a86bd5a286ccfe00717fd0e77a34bb14a96c379c3b7f52",
+    "map-22.svg": "00987b2a8a5c0cef84c875fcac9e7dee647915e557e457f1aa5812658d8aa3aa",
+    "map-8.svg": "119e45fe1d6f469796646fcf408c9694ec5b7e1a703c9b3de1349464bc8a4f55",
+    "map-9.svg": "f00b01cbc74559723c2a8c02d14a6b9305c8c650aeee0eba5d261d9072303feb",
+    "app.js": "daa0e25ea8775453151d0d04fba1f23cc17239a0a79e17452402ba61374cbb3c"
+  }
+}

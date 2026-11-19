@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: nexaassist-guide
+    runtime: static
+    buildCommand: "true"
+    staticPublishPath: ./public
+    autoDeployTrigger: "off"
+    envVars:
+      - key: SKIP_INSTALL_DEPS
+        value: "true"
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer

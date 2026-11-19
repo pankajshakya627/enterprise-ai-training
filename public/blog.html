@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Inside NexaAssist: how Streamlit, FastAPI, LangGraph, LangChain, MongoDB Atlas and MCP work together for cited policy answers and separately approved synthetic banking actions.">
+  <meta name="theme-color" content="#086d8c">
+  <title>Inside NexaAssist: from policy evidence to an approved action</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip" href="#article">Skip to article</a>
+  <header class="topbar">
+    <a class="brand" href="index.html#overview"><span class="brand-mark" aria-hidden="true">N</span><strong>NexaAssist</strong><small>Application field guide</small></a>
+    <nav class="top-links" aria-label="Resources"><a href="index.html#workflows">Explore workflows</a><a href="index.html#architecture">Architecture maps</a><span class="version">Source snapshot · 19 Nov 2026</span></nav>
+  </header>
+  <div class="article-shell">
+    <main class="article-main" id="article" tabindex="-1">
+      <p class="eyebrow">Engineering / application walkthrough</p>
+      <h1>Inside NexaAssist: from policy evidence to an approved action.</h1>
+      <p class="lede">An assistant can explain a policy, look up an account and prepare a service request. Each task needs a different boundary. Here is how the current NexaAssist application connects them.</p>
+      <div class="article-meta"><span>19 November 2026</span><span>Based on reviewed source</span><span>Synthetic banking environment</span></div>
+      <div class="callout"><strong>What this article covers.</strong><p>The running application checkout and its companion banking source, including uncommitted work. This is an explanation of implemented behavior. The production-hardening plan and live deployment certification are separate.</p></div>
+
+      <section id="purpose">
+        <h2>Start with the job, not the stack.</h2>
+        <p>A staff member asks, “What is the maximum loan amount for NexaHome?” Another asks for the accounts and loans belonging to an authorized customer. A third wants to prepare a home-loan enquiry case. Those requests can share a chat window, but they should not share the same execution path.</p>
+        <p>The policy question needs evidence that applies to the selected policy date and product. The customer read needs an authorized scope and a typed bank response. The case request needs complete fields, validation, a durable proposal and a different reviewer before execution.</p>
+        <p>NexaAssist brings these paths together through a Streamlit interface, two FastAPI applications, LangChain chains, a LangGraph workflow, MongoDB Atlas and scoped MCP adapters. Its present banking environment is synthetic. It does not make credit decisions or provide investment, tax or legal advice.</p>
+        <ol class="path-strip" aria-label="Application responsibilities"><li><b>INTERFACE</b>Capture the request</li><li><b>EVIDENCE</b>Find policy or facts</li><li><b>CONTROL</b>Validate and authorize</li><li><b>OUTCOME</b>Return an answer or receipt</li></ol>
+      </section>
+
+      <section id="services">
+        <h2>Three local processes, distinct responsibilities.</h2>
+        <p><strong>Streamlit renders the interface.</strong> It sends requests to the APIs, shows answers and evidence, and keeps browser-session state. It does not define retrieval chains or query MongoDB directly. Normal reruns retain the current chat and sign-in; a hard refresh or process restart can reset session-only history.</p>
+        <p><strong>The Agent API coordinates intent and actions.</strong> It resolves access, routes requests through LangGraph, calls the configured policy retrieval adapter and banking tools, and manages saved runs. Classification and grounded policy answering use configured model clients within the Agent process.</p>
+        <p><strong>The RAG API owns the policy retrieval and direct-answer service.</strong> It provides retrieval, cited answers, optional answer evaluation and feedback routes. Agent policy chat normally retrieves evidence through policy MCP, then generates its answer inside Agent. It does not simply proxy every question to the RAG answer endpoint.</p>
+        <div class="table-wrap"><table><thead><tr><th scope="col">Local process</th><th scope="col">Default port</th><th scope="col">Main responsibility</th></tr></thead><tbody><tr><th scope="row">Streamlit</th><td>8501</td><td>Rendering, sign-in UI and review forms</td></tr><tr><th scope="row">Agent API</th><td>8001</td><td>Routing, customer scope, saved proposals and execution recovery</td></tr><tr><th scope="row">RAG API</th><td>8000</td><td>Policy evidence, direct answers, evaluation and feedback</td></tr></tbody></table></div>
+        <p>The deployed-banking profile keeps these three processes local. It connects banking operations to the hosted Horizon MCP endpoint and the Render banking API. Local banking and direct HTTP compatibility are explicit profile choices; they are not automatic failover paths.</p>
+        <p><a href="index.html#architecture/22-overall">Explore the overall application map →</a></p>
+      </section>
+
+      <section id="policy">
+        <h2>A policy answer starts with a dated corpus.</h2>
+        <p>Retrieval embeds the question and searches MongoDB Atlas. The current scope uses institution, effective dates, jurisdiction, confidentiality metadata and optional product. Dense retrieval is selected in the reviewed deployed profile. Hybrid search and reranking are configured alternatives.</p>
+        <p>The first matches are child chunks. Where a matching parent exists and its metadata is consistent, the chain expands the result to the full section. Missing or inconsistent parents can fall back to child text. The retrieval layer also resolves applicable linked amendments and reconstructs their content.</p>
+        <p>The answer chain assembles bounded context and checks that required amendments have not been lost to the context budget. If one is missing, it returns insufficient evidence before generation. Otherwise a configured chat model creates a structured answer draft.</p>
+        <p>Before release, inline citation IDs must match the evidence references, every referenced source must be known, and each quoted passage must occur exactly in the retained source text. There are at most two citation attempts. If validation still fails, the chain returns <code>insufficient_evidence</code>. The current UI receives a completed answer; it does not receive provisional answer tokens.</p>
+        <div class="callout warning"><strong>Scope is not identity authorization.</strong><p>These corpus metadata filters are not per-user document ACLs. Public retrieval and policy-answer routes in this checkout do not implement the planned staff OIDC and document-access manifest.</p></div>
+        <p><a href="index.html#workflows/policy">Walk through a policy question →</a></p>
+      </section>
+
+      <section id="customer">
+        <h2>A customer read follows an authorization path.</h2>
+        <p>Consider “Show the accounts and loans for customer NXC-0010.” The customer ID identifies the requested subject; it does not grant access. In the UI, the staff member signs in using their own named Agent credential. The session endpoint resolves a stable principal, permitted customers and reviewer permission.</p>
+        <p>With MongoDB staff authentication selected, the application stores one-way SHA-256 verifiers of high-entropy random API keys and current grants. It reads enabled, institution-scoped records. A revoked key or a staff-store failure does not switch the application to environment grants. This is API-key authentication, not staff SSO.</p>
+        <p>The customer-context service checks the resolved customer scope and supports accounts/loans, disclosed income with verification status, and bounded transactions for owned accounts. Transaction queries resolve and verify an account before requesting a page, validate dates and limits, and check the returned scope.</p>
+        <p>These reads return typed factual results. They do not create bank records and do not require a write proposal. Other customer tools may exist in MCP without being connected to Agent chat.</p>
+        <p class="small">Compatibility detail: an explicitly configured legacy environment training token can still provide scope to one-shot API reads. The UI session portal and durable saved-run routes require named identities. Do not treat that compatibility path as staff SSO.</p>
+      </section>
+
+      <section id="approval">
+        <h2>A proposal is not a completed banking action.</h2>
+        <p>Now consider “Prepare a LOW-priority LOAN_ENQUIRY case about home-loan documents for NXC-0010.” The workflow checks that the action is supported, the customer is authorized and required fields are present. It retrieves dated evidence and validates the request against policy and required banking facts.</p>
+        <p>An allowed result becomes a durable saved proposal. The run stores its owner, an exact proposal hash and one stable operation key. LangGraph pauses at an approval interrupt. The interface shows the proposed payload and evidence so that a different authorized reviewer can approve or reject that exact proposal.</p>
+        <p>The service prevents self-approval. Review permission and customer scope are server-managed. Approval is time-bounded; the default expiry is fifteen minutes from run creation, rather than fifteen minutes after a reviewer happens to open the page.</p>
+        <p>Approval resumes the workflow, but it does not skip validation. Policy and banking facts are refreshed. A changed proposal or policy fingerprint blocks execution and requires a fresh proposal. Current owner and reviewer grants, the retained banking identity, the safe retry boundary and the execution lease are checked before the external write.</p>
+        <div class="callout"><strong>Read the outcome literally.</strong><p>A created-case receipt confirms that case creation was observed. A service-request receipt confirms acceptance and does not necessarily mean the requested downstream work has completed.</p></div>
+        <p class="small">The separate-review flow described here is the durable UI workflow. The legacy direct-submit route is disabled by default. Explicitly enabling <code>AGENT_ALLOW_DIRECT_SUBMIT</code> creates a separate compatibility path without that durable review flow.</p>
+        <p><a href="index.html#workflows/case">Explore the approval sequence →</a></p>
+      </section>
+
+      <section id="mcp">
+        <h2>MCP gives each integration a constrained interface.</h2>
+        <p>The application has two distinct MCP roles. <strong>Policy MCP</strong> is a read-only stdio child exposing <code>retrieve_policy</code>, a retrieval-contract resource and an explanatory prompt. It wraps the RAG HTTP retrieval endpoint; it does not access the bank or query Atlas directly.</p>
+        <p><strong>Banking MCP</strong> exposes a fixed twelve-tool contract. The application adapter maps known banking operations to those tools. Hosted requests carry Horizon OAuth and an application-signed context binding the principal, customer scope, backend identity and short expiry. Writes also need a grant bound to the exact tool, canonical arguments and original operation key.</p>
+        <p>Three credentials serve different purposes: the staff key resolves application authority, operator OAuth authenticates to the gateway, and the backend bank bearer authenticates MCP to the bank API. Signing in to Horizon alone does not authorize an Agent banking write.</p>
+        <p>The companion repository also includes an optional Claude stdio approval bridge. That bridge uses its own explicit human-confirmation model; it is not the same authority flow as the application’s separate staff reviewer.</p>
+      </section>
+
+      <section id="recovery">
+        <h2>Uncertain outcomes keep their original identity.</h2>
+        <p>A bank can commit a write even when the application loses the response. Treating every timeout as “nothing happened” risks duplicate submissions. The run service records the first attempt before the effect and retains an <code>unconfirmed</code> run when the result is ambiguous.</p>
+        <p>Recovery loads that same saved run. A retained submitted result is returned without replaying the action. An eligible uncertain run reuses the exact payload and operation key within the safe retry window. The application’s boundary is twenty-three hours; the companion bank’s idempotency window is twenty-four hours.</p>
+        <p>The companion bank commits mutations, counters and replay results in one MongoDB transaction. Within the window, a matching operation can return its original replay receipt. Reusing its key with another payload is rejected. A changed bank destination or expired safe window requires reconciliation, not a replacement key.</p>
+        <p>The local mock bank behaves differently: its write and replay state live in process memory. Restarting that mock is not equivalent to restarting the persistent Render service.</p>
+      </section>
+
+      <section id="notes">
+        <h2>Small wording changes matter: a note is still a note.</h2>
+        <p>The request “add this note: please take this on high priority” appends text to an existing authorized case through the reviewed-write flow. It does not update the case’s priority, escalate it or promise a response time. The application checks case ownership and does not create a replacement case if the referenced one is missing.</p>
+        <p>Fixed structured note text is excluded from routing-model variables. Unstructured query text can still be classified. Stored bank notes are not fed back to the model as authoritative instructions. These distinctions reduce unintended instruction paths, but they do not establish a complete production privacy or prompt-injection guarantee.</p>
+      </section>
+
+      <section id="data">
+        <h2>Data ownership extends beyond the vector index.</h2>
+        <p>Application MongoDB holds child vectors and full policy parents, feedback, current staff grants, run metadata and LangGraph checkpoints. The companion bank owns cases, service-request receipts, counters and idempotency records. They are distinct logical storage responsibilities and may share a cluster.</p>
+        <p>The authoritative document register controls policy ingestion. Changed child chunks are embedded and upserted, parents are updated, and stale records are removed. This happens in place across collections. The current implementation does not publish an immutable paired corpus generation, and retirement physically deletes scoped records rather than retaining rollback-safe tombstones.</p>
+        <p>Operational run/checkpoint retention defaults to seven days. That is not an independent, insert-only, year-long action audit. The manifest and diagrams describe this distinction explicitly.</p>
+      </section>
+
+      <section id="quality">
+        <h2>Quality evidence and release readiness are separate.</h2>
+        <p>The project uses linting, formatting, types, floor guards, tests, coverage and source/secret scanning. The retained application coverage floor is 84.13%; changed application lines require 100%. Quality and security baselines must not be weakened to obtain a passing change.</p>
+        <p>Live answer evaluation uses the retained golden dataset, RAGAS metrics and structured judges with protocol fingerprints and metric floors. It is separate from source tests. The trusted live workflow is manual or callable; a versioned production release bundle and enforced promotion/rollback process are separate hardening work.</p>
+        <p>Datadog tracing and scored exports are configurable, and structured JSON logs are available. Current LLM annotations can still contain question, context, answer and prompt variables. Metadata-only production export, provider/data-class approval and verified external receipt require additional evidence and controls.</p>
+        <p>The same standard applies to this article: rendered diagrams and verified source paths do not prove deployed-image parity, staff SSO, global capacity limits or production readiness.</p>
+      </section>
+
+      <section id="next">
+        <h2>Continue with the source-backed maps.</h2>
+        <p>Use the architecture explorer for a specific service boundary, the walkthroughs for a request lifecycle, and the operations guide for local/deployed profiles and credential placement. None of these educational interactions makes model calls or bank requests.</p>
+        <div class="actions"><a class="button" href="index.html#architecture/22-overall">Explore architecture</a><a class="button secondary" href="index.html#workflows/case">Follow an approval</a><a class="button text" href="index.html#operations">Run &amp; authenticate →</a></div>
+      </section>
+      <section class="source-note" id="sources">
+        <h2>Source and review scope</h2>
+        <p>Application source: <code>feat/prepayment-validator @ bc87167</code>. Companion bank source: <code>codex/claude-user-approved-writes @ 3fb1a35</code>. Both include reviewed uncommitted work. The separate production-hardening worktree is not represented as completed implementation here.</p>
+        <p>Key evidence includes <code>app/services/agent.py</code>, <code>app/agents/orchestrator.py</code>, <code>app/services/agent_runs.py</code>, <code>app/chains/answer.py</code>, <code>app/chains/retrieval.py</code>, <code>app/database/staff_credentials.py</code>, <code>app/services/banking_mcp.py</code>, and the companion <code>app/database/banking.py</code>. The downloadable guide links the complete diagram evidence.</p>
+        <p><a href="architecture-guide.md" download>Download the detailed architecture guide</a> · <a href="verification.json">Inspect source hashes and review evidence</a> · <a href="index.html#limits">Read current boundaries</a></p>
+      </section>
+      <footer class="footer"><span>NexaAssist / application field guide</span><a href="#article">Back to the article ↑</a></footer>
+    </main>
+    <aside class="article-toc" aria-label="On this page">
+      <p class="nav-label">In this article</p>
+      <a href="#purpose">The job and its boundaries</a><a href="#services">Three local processes</a><a href="#policy">Dated evidence and citations</a><a href="#customer">Authorized customer reads</a><a href="#approval">Proposal and separate approval</a><a href="#mcp">Two MCP roles</a><a href="#recovery">Recovering uncertain outcomes</a><a href="#notes">What a note actually does</a><a href="#data">Data ownership</a><a href="#quality">Quality and readiness</a><a href="#sources">Source and review scope</a>
+    </aside>
+  </div>
+</body>
+</html>
